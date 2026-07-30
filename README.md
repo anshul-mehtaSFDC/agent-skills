@@ -52,18 +52,19 @@ cd agent-skills
 ./install.sh            # interactive: pick tool, scope, and skills
 ```
 
-The interactive flow asks three things:
-1. **Tool** — `claude` / `cursor` / `codex`
+The interactive flow asks three things (**tools and skills are multi-select**):
+1. **Tool(s)** — any of `claude` / `cursor` / `codex`, or `all` (comma-separated numbers/names)
 2. **Scope** — `project` (one repo) / `global` (all your projects)
 3. **Skills** — `all`, or a comma-separated list (menu is grouped by category)
 
-Non-interactive (CI / scripting):
+Non-interactive (CI / scripting) — `--tool` and `--skills` both accept comma lists or `all`:
 ```bash
 ./install.sh --tool claude --scope global  --skills all
+./install.sh --tool claude,cursor,codex --scope global --skills all      # every tool
+./install.sh --tool all --scope project --dir /path --skills diagram-architect,foo
 ./install.sh --tool cursor --scope project --dir /path/to/project --skills diagram-architect
-./install.sh --tool codex  --scope global  --skills diagram-architect,another-skill
 ./install.sh --list                        # show all skills, grouped by category
-./install.sh --uninstall --tool claude --scope global --skills diagram-architect
+./install.sh --uninstall --tool claude,cursor --scope global --skills diagram-architect
 ```
 
 ---
