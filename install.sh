@@ -221,16 +221,39 @@ dest_for() { # $1=tool $2=skill
   esac
 }
 
-install_one() { # $1=tool $2=src $3=dest
+install_one() { # $1=tool $2=src(SKILL.md) $3=dest
   local tool="$1" src="$2" dest="$3"
+  local srcdir; srcdir="$(dirname "$src")"
   mkdir -p "$(dirname "$dest")"
   if [[ "$tool" == "cursor" ]]; then
+    # Cursor = single .mdc rule. Bundle SKILL.md body + any references/*.md inline
+    # (Cursor rules can't reference sibling files), and note supporting assets.
     local DESC BODY
     DESC="$(awk '/^description:/{sub(/^description:[[:space:]]*/,""); gsub(/^"|"$/,""); print; exit}' "$src")"
     BODY="$(awk 'f==2{print} /^---[[:space:]]*$/{f++}' "$src")"
-    { echo "---"; echo "description: $DESC"; echo "globs:"; echo "alwaysApply: false"; echo "---"; echo ""; printf '%s\n' "$BODY"; } > "$dest"
+    { echo "---"; echo "description: $DESC"; echo "globs:"; echo "alwaysApply: false"; echo "---"; echo "";
+      printf '%s\n' "$BODY"
+      if [[ -d "$srcdir/references" ]]; then
+        local rf
+        for rf in "$srcdir"/references/*.md; do
+          [[ -e "$rf" ]] || continue
+          echo ""; echo "---"; echo ""
+          echo "<!-- bundled reference: references/$(basename "$rf") -->"
+          cat "$rf"
+        done
+      fi
+      # note non-markdown assets (e.g. reactflow-template.html) that can't inline into a rule
+      local asset
+      for asset in "$srcdir"/*.html "$srcdir"/*.txt; do
+        [[ -e "$asset" ]] || continue
+        echo ""; echo "<!-- asset in source repo (not bundled): $(basename "$asset") — copy it manually if needed -->"
+      done
+    } > "$dest"
   else
-    cp "$src" "$dest"
+    # Claude / Codex = folder skill. Copy the WHOLE skill dir (SKILL.md + references/ + assets).
+    local destdir; destdir="$(dirname "$dest")"
+    rm -rf "$destdir"; mkdir -p "$destdir"
+    cp -R "$srcdir"/. "$destdir"/
   fi
 }
 

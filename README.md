@@ -78,15 +78,18 @@ Non-interactive (CI / scripting) — `--tool` and `--skills` both accept comma l
 
 | Tool | Scope | Destination | Format |
 |---|---|---|---|
-| Claude Code | global | `~/.claude/skills/<name>/SKILL.md` | copied as-is |
-| Claude Code | project | `<project>/.claude/skills/<name>/SKILL.md` | copied as-is |
-| Cursor | project | `<project>/.cursor/rules/<name>.mdc` | converted to a Cursor rule |
+| Claude Code | global | `~/.claude/skills/<name>/` | whole folder (SKILL.md + references/ + assets) |
+| Claude Code | project | `<project>/.claude/skills/<name>/` | whole folder |
+| Cursor | project | `<project>/.cursor/rules/<name>.mdc` | one rule; references bundled inline |
 | Cursor | global | `~/.cursor/rules/<name>.mdc` | converted (see note) |
-| Codex | global | `~/.agents/skills/<name>/SKILL.md` | copied (cross-runtime path) |
-| Codex | project | `<project>/.agents/skills/<name>/SKILL.md` | copied |
+| Codex | global | `~/.agents/skills/<name>/` | whole folder (cross-runtime path) |
+| Codex | project | `<project>/.agents/skills/<name>/` | whole folder |
 
-- **Cursor** uses *rules* (`.mdc`), not skills — the installer rewrites the frontmatter
-  (`description` / `globs` / `alwaysApply: false`) and keeps the full body.
+- **Folder skills:** a skill may be a folder — `SKILL.md` (the router, always loaded) plus
+  a `references/` dir and assets that the agent reads on demand. Claude/Codex get the whole
+  folder; the installer copies it intact.
+- **Cursor** uses a single *rule* (`.mdc`) that can't reference sibling files, so the installer
+  **bundles `references/*.md` inline** into the one rule (and notes any non-markdown assets).
 - **Cursor global** rules are usually set in Settings → Rules (UI); the installer drops
   files in `~/.cursor/rules/` and prints a note if manual paste is needed.
 - **Codex** (and other runtimes) recognize the cross-runtime `~/.agents/skills/` path.
