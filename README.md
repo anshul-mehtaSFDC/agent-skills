@@ -1,9 +1,12 @@
 # agent-skills
 
-A portable collection of AI-agent **skills** (and rules) installable into
-**Claude Code**, **Cursor**, or **Codex** — at **project** or **global** scope —
-with a single installer. Tool-neutral: the same skill content is copied or
-format-converted to whatever each tool expects.
+A portable collection of AI-agent **skills** (and rules) usable from
+**Claude Code**, **Cursor**, or **Codex** two ways:
+
+1. **Installer** — copies/converts skills into each tool at **project** or **global** scope (native auto-triggering).
+2. **MCP server** — serves skills live over one connection to any MCP client (centralized, always-fresh). See [`mcp/`](mcp/README.md).
+
+Tool-neutral: the same `SKILL.md` content is copied, format-converted, or served as-is.
 
 ---
 
@@ -12,6 +15,7 @@ format-converted to whatever each tool expects.
 - [Install](#install)
 - [What installs where](#what-installs-where)
 - [Using skills per tool](#using-skills-per-tool)
+- [Use as an MCP server](#use-as-an-mcp-server)
 - [Repository layout](#repository-layout)
 - [Contribution guidelines](#contribution-guidelines)
 - [Troubleshooting](#troubleshooting)
@@ -99,6 +103,35 @@ its intake → preview → export workflow.
 
 ---
 
+## Use as an MCP server
+
+Instead of installing files, you can serve the skills to any MCP-capable client over
+one connection. Skills become **tools** (`list_skills`, `get_skill`, `search_skills`),
+**prompts** (one per skill), and **resources** (`skill://<name>`).
+
+```bash
+cd mcp && npm install && npm run build
+```
+Then register with your client, e.g. Claude Code:
+```bash
+claude mcp add agent-skills -- node /abs/path/to/agent-skills/mcp/dist/index.js
+```
+Or in an `mcp.json` (Claude Desktop / Cursor / Codex):
+```json
+{ "mcpServers": { "agent-skills": {
+  "command": "node",
+  "args": ["/abs/path/to/agent-skills/mcp/dist/index.js"],
+  "env": { "AGENT_SKILLS_DIR": "/abs/path/to/agent-skills/skills" }
+}}}
+```
+
+**Installer vs MCP:** the installer gives native **auto-triggering** skills (the model
+loads them by `description` automatically); the MCP gives **centralized, always-fresh**
+access but the model must choose to call `get_skill`. Use whichever fits — or both.
+Full details in [`mcp/README.md`](mcp/README.md).
+
+---
+
 ## Repository layout
 
 ```
@@ -106,6 +139,9 @@ agent-skills/
 ├── install.sh                     # the one installer (auto-discovers skills)
 ├── README.md
 ├── CONTRIBUTING.md                # full guide to adding a skill
+├── mcp/                           # optional MCP server (tools + prompts + resources)
+│   ├── src/index.ts
+│   └── README.md
 └── skills/
     └── <category>/                # organizational only — doesn't affect install target
         └── <skill-name>/
