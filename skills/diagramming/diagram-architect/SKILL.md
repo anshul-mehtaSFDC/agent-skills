@@ -51,7 +51,7 @@ Not a reminder — a gate. Skipping it is the failure this skill exists to preve
 1. **Type sanity** — does the type match the request word? If they said "flow"/"sequence" but you're drawing architecture, STOP and reconsider. State: *"Request says '<word>' → <type> because <reason>."*
 2. **Theme grounded** — write the literal palette + where each value came from. Any value from memory = not grounded: go extract it, or say "neutral, no source." **No guessed brand colors.**
 3. **Inventory confirmed** — entity count + connection count from `system-discovery`, user-confirmed (or discovery explicitly waived as trivial). Every node/edge traces to a row.
-4. **Engine + detail level** chosen.
+4. **Engine + detail level + direction** chosen. State the layout **direction** (RIGHT vs DOWN) per the [layout.md](references/layout.md) depth×size table — direction is the #1 legibility lever, so decide it here, not at validation.
 
 If you can't fill in #1 and #2 concretely, you're not ready to draw.
 

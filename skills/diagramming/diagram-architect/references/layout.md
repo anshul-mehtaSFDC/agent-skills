@@ -33,7 +33,7 @@ A back-edge drawn like a forward one slices across the whole graph. Handle it:
 - Keep ELK's default cycle-breaking; don't fight it with manual positions.
 
 ## 4. Density (L3)
-L3 + >~25 nodes or a ~10-deep pipeline always fights `fitView`. In order: go **DOWN** → **split feedback edges** → **group into zones** and collapse detail → **split into multiple diagrams** (one per subsystem) rather than one unreadable megagraph. Tell the user when you split and why.
+L3 + >~25 nodes or a ~10-deep pipeline always fights `fitView`. In order: go **DOWN** → **split feedback edges** → **group into zones** and collapse detail → **split into multiple diagrams** rather than one unreadable megagraph. **Pick the seams from the `system-discovery` BOUNDARIES list** — split at the zone/subsystem/ownership boundaries it already identified (each becomes one diagram, with the cross-boundary CONNECTIONS shown as labelled off-page connectors between them). That keeps the split principled instead of arbitrary. Tell the user when you split and why.
 
 ## 5. Verify layout, not just pixels
 In Render Validation, explicitly check **edge crossings, back-edges cutting across, aspect ratio** — not only clipping/contrast. If it reads messy, **re-layout** (change direction / split feedback edges) before re-styling.
