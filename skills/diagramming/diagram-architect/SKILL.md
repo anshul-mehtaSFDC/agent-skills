@@ -71,12 +71,13 @@ How should it look? Ground the theme the same way you ground the content:
 - **Neutral / default** — clean modern default (one dark heading color + one bright accent).
 - **User specifies** — explicit hex colors / font.
 
-**MANDATORY when a brand is chosen — do NOT skip and do NOT silently use neutral:**
-1. If the brand source is a **URL** → call **WebFetch** on it. If a **file/repo/logo** → **Read** it. A company *name with no source* is NOT enough — ask for a URL/logo/repo, or state you're using neutral and why. Never guess a palette from memory.
-2. **Extract and echo the theme spec back to the user** before drawing — the actual hex colors, font, and logo you found (e.g. "Using #E31937 red / #000 / Helvetica from tesla.com"). If you couldn't extract them, say so explicitly rather than defaulting.
-3. Only draw once the palette is grounded. Apply it to **every** diagram in the set.
+**MANDATORY when a brand is chosen — extract, don't guess, don't silently use neutral.** Source priority (reuse beats re-extraction):
+1. **Check the repo / prior diagrams FIRST** — an existing HTML/slide often already has the palette baked in (`:root` vars, hex codes, font). Grep the repo for hex colors / `--primary` / font-family before anything else.
+2. **Logo or screenshot image** → Read it and sample the colors.
+3. **Website URL** → WebFetch — but ⚠️ **WebFetch returns rendered prose, not CSS**, so it often can't give hex codes. If it fails, fall back to reading a logo, a brand-palette site (brandcolors.net etc.), or **ask the user for the hex list.**
+4. A company *name alone* is not a source — ask, or state you're using neutral and why. **Never guess a palette from memory.**
 
-> Skipping extraction or defaulting to neutral without saying so is the #1 branding failure. If a brand was requested, the render MUST visibly use the extracted colors/font.
+Then **echo the palette + its source back** ("#D61D23 / Montserrat ← repo's prior HTML") and apply it to every diagram. If a brand was requested, the render MUST visibly use those colors — defaulting to neutral without saying so is the #1 branding failure.
 
 ## Pre-Render Gate (STOP — answer these out loud before writing any HTML)
 
@@ -105,20 +106,47 @@ If you cannot fill in #1 and #2 concretely, you are not ready to draw. No except
 
 **Decision rule:** if it's nodes-and-edges → **React Flow + ELK**. If it's a huge graph → **Cytoscape + ELK**. If it's time/hierarchy/sequence → the dedicated lib above. Never fall back to Mermaid, even for a "quick" diagram — a small React Flow diagram is just as fast to author and looks far better.
 
-**Making React Flow look good (not the default gray boxes):**
-- **ELK layered layout** — `elk.algorithm: 'layered'`, `elk.direction: 'RIGHT'` (or DOWN), generous `elk.spacing.nodeNode` (~60) and `elk.layered.spacing.nodeNodeBetweenLayers` (~90) so nothing collides.
-- **Custom node types** styled with the brand palette — rounded cards, soft shadow, a colored header bar, optional icon; **size each node to its text so titles never clip** (measure/estimate width from label length, set node width; multi-line wrap for long labels).
-- **Grouped/parent nodes** for zones/layers — tinted background (`--zone-bg`) + a zone label; children laid out inside via ELK hierarchy.
-- **Edges:** `smoothstep`/orthogonal, arrowheads on every edge, readable edge labels (protocol/trigger/cadence) with a small background so they don't sit on lines.
-- `fitView` on load with padding; a legend if edge types differ.
-- Apply the extracted theme spec (Company Theming) to node/edge/zone styles.
+**Styling** (secondary to layout — do this, but don't over-invest): branded custom nodes (rounded card, colored header bar, soft shadow) sized to their text so titles never clip; tinted zone/parent nodes with a label; every edge `smoothstep` + arrowhead + a labelled background chip; `fitView` with padding; theme tokens from Company Theming. Start from [`reactflow-template.html`](reactflow-template.html) — don't hand-roll boilerplate.
 
-**Reference implementation:** a self-contained React Flow + ELK HTML skeleton (CDN imports, ELK layout, branded custom node, zone groups) is in [`reactflow-template.html`](reactflow-template.html) in this skill's folder — adapt it: swap the theme tokens, nodes, and edges for the grounded content. Start from it rather than hand-rolling boilerplate.
+## Layout Legibility — the thing that makes or breaks a flow
+
+**Readability beats branding.** A crossing-free flow in flat gray reads better than a beautifully-themed tangle. Layout is where most diagrams fail; spend your effort here.
+
+**Decision table — depth × size → direction + spacing (start here, one pass instead of three):**
+
+| Diagram | Direction | `nodeNodeBetweenLayers` / `spacing.nodeNode` | Notes |
+|---|---|---|---|
+| **L1** (≤10 nodes, ≤4 deep) | RIGHT | 80 / 55 | fits a slide easily |
+| **L2** (10–25 nodes) | RIGHT, or DOWN if >6 deep | 90 / 60 | watch aspect ratio |
+| **L3** (>25 nodes or ~10-deep pipeline) | **DOWN** | 70 / 45 | expect `fitView` shrink; budget a 2nd layout pass; **>40 edges → split feedback edges**; consider splitting into multiple diagrams |
+
+**1. Direction is the single biggest lever:** wide-and-shallow → **RIGHT** (reads like a timeline); tall/deep (>~6 layers) or many nodes → **DOWN** (scrolls naturally, keeps aspect ratio near the 16:9 target instead of 4× too wide).
+
+**2. Preserve execution order & cut crossings** (ELK layered options):
+```
+'elk.layered.crossingMinimization.strategy':'LAYER_SWEEP',
+'elk.layered.nodePlacement.strategy':'NETWORK_SIMPLEX',
+'elk.layered.considerModelOrder.strategy':'NODES_AND_EDGES',  // keep input order → predictable reading sequence
+'elk.edgeRouting':'ORTHOGONAL',
+'elk.layered.spacing.nodeNodeBetweenLayers':'90',
+'elk.spacing.nodeNode':'60', 'elk.spacing.edgeNode':'25',
+```
+`considerModelOrder` is what stops ELK from scrambling steps — feed nodes/edges in execution order and it lays them out in that order.
+
+**3. Feedback / back edges (retry, loop, callback, async result)** are the #1 clutter source — a back-edge drawn like a forward one cuts across the whole graph. Handle them:
+- **Style them distinctly** — dashed, a muted/secondary color, curved (not orthogonal), labelled ("retry"/"async result"). Signals "this goes backward."
+- **If ≥2 long back-edges make it messy → split them:** replace the edge with a small labelled "return" stub at the source and a matching marker at the target (an off-page-style connector) instead of one long line across the canvas. Note the pairing in the label.
+- Keep ELK's default cycle-breaking; don't fight it with manual positions.
+
+**4. Density (L3):** L3 + >~25 nodes or a ~10-deep pipeline will always fight `fitView`. Options, in order: go **DOWN**; **split feedback edges** (#3); **group into zones** and collapse detail; or **split into multiple diagrams** (one per subsystem) rather than one unreadable megagraph. Tell the user when you split and why.
+
+**5. Verify layout, not just pixels:** in Render Validation, explicitly check **edge crossings, back-edges cutting across, and aspect ratio** — not only clipping/contrast. If it reads messy, re-layout (change direction / split feedback edges) before re-styling.
 
 ## Workflow — preview → approve → export
 
 1. **Interview** (the 4 questions above). Batch them. Do NOT ask export format yet.
 1b. **Discover the system** (non-trivial diagrams) — run **`system-discovery`**: read all relevant sources, build the entity + connection inventory, gap-hunt, and **confirm it with the user.** The diagram draws from this inventory. Skip only for a trivially small diagram.
+1c. **Diff mode (if a diagram already exists)** — do NOT blindly re-emit it. Re-verify each node and edge against the *current* source, and surface what changed (added/removed/wrong/unverified). Re-drawing an existing diagram is a chance to catch drift, not a copy job — the discovery pass often finds the old diagram was already wrong.
 2. **Ground the CONTENT** — this is satisfied by the discovery inventory (entities/connections with their sources). If you skipped discovery, still read the named file / query the system; never proceed on memory when a source exists.
 2b. **Ground the THEME (if a brand was chosen)** — **actually call WebFetch on the URL, or Read the logo/repo/CSS.** Extract hex colors + font + logo and **echo them back to the user.** Do NOT skip this and do NOT silently fall back to neutral (see Company Theming). If no source was given, ask for one or state you're using neutral.
 2c. **Clear the Pre-Render Gate** — post typed answers to all four gate items (type sanity, grounded palette, content source, engine+detail). Do not write HTML until this is in your reply.
@@ -148,6 +176,8 @@ Then the format:
 | **Standalone HTML** | Interactive share, living doc | The preview file itself |
 | **Embed in deck/site** | Presentation | Hand back the SVG/PNG or an iframe-able HTML |
 
+**Match format to detail level:** **L1/L2 → PNG/PDF** is fine for a slide. **L3 (dense) → SVG or interactive HTML, NOT a deck PNG** — a detailed graph shrunk to a slide PNG is unreadable; give a zoomable SVG or the HTML so the viewer can pan/zoom. If they insist on a PNG for an L3, warn it'll be unreadable and offer to split it.
+
 **How to export the DIAGRAM ONLY (strip all chrome):**
 - **Isolate the element, not the page.** Export the diagram node itself, not `document.body`:
   - React Flow → `toSvg`/`toPng` (from `html-to-image`, which React Flow uses) targeting the `.react-flow__viewport` (call `fitView` first); hide `Panel`/`Controls`/`MiniMap`/`Background` before capture.
@@ -155,21 +185,19 @@ Then the format:
 - **Bare-page render for PDF/PNG:** render the diagram into a minimal HTML that contains *only* the diagram element (no `<h1>`, talking points, or legend) — or set `@media print { .chrome { display:none } }` and print just the diagram container — then headless-Chrome capture the clipped bounds, not the window.
 - **Trim whitespace/margins** to the diagram's true bounding box (`fitView`, tight `viewBox`, `--force-device-scale-factor` for crisp PNG). Re-validate the exported file for clipping (Render Validation).
 
-## IDE Preview — show the render in-editor where possible
+## Showing the user (the honest loop)
 
-Prefer showing the live preview **inside the IDE** so the user doesn't leave the editor:
-- **VS Code / Cursor:** write the `.html` and open it — `code --reuse-window <file>` or the built-in **"Open with Live Preview"/Simple Browser** (`workbench.action.webview` / the Live Preview extension) renders the interactive HTML in a side panel. Suggest the exact command if you can't trigger it directly.
-- **JetBrains:** open the HTML with the built-in browser preview.
-- **Fallback (any IDE):** open in the system browser (`open`/`xdg-open`/`start <file>`) and print the file path so the user can click it.
-- Always still write the file to disk so it persists and can be exported later.
+You (an agent) usually **can't drive a live in-IDE preview** — so the real loop is: **headless-screenshot → Read the PNG → judge it yourself (Render Validation) → write the file and open it for the user.** Treat that as primary.
 
-**Preview-tooling-unavailable fallback (be explicit, don't fake it):** if you cannot open an in-IDE preview AND cannot headless-screenshot (e.g. browser/MCP down, no Chrome), say so plainly: *"I can't render a preview here — open `<path>` to view it. I have NOT visually verified it; please check for clipping/contrast."* Do not present an unseen file as validated, and do not claim a screenshot you couldn't produce. Prefer the in-IDE preview over just handing back a path — actually attempt to open it (step 7), and only drop to "here's the path" when the open fails.
+1. Screenshot + inspect (Render Validation) — this is how you catch messiness *before* showing.
+2. Write the `.html` to disk and open it for the user: VS Code/Cursor `code <file>` (or Live Preview/Simple Browser side panel if available), JetBrains browser preview, else system browser (`open`/`xdg-open`/`start`). Hand back the path.
+3. If you **cannot** screenshot AND cannot open a preview, say so plainly — *"I couldn't visually verify this; open `<path>` and check layout/contrast"* — never present an unseen file as validated or fake a screenshot.
 
-Tell the user which preview you opened (or the path + one-line "open this to preview"). Then treat it as the approval gate (workflow step 7).
+That's the approval gate (workflow step 7).
 
 ## Render Validation — catch clipping & artifacts before showing
 
-A diagram that renders "mostly right" but clips a label or overlaps two nodes reads as broken. Validate the actual pixels, not just the source. **Screenshot the HTML headless and inspect it** — don't trust that valid source = clean render.
+A diagram that renders "mostly right" but clips a label, overlaps nodes, or has edges crossing everywhere reads as broken. Validate the actual pixels, not just the source. **Screenshot the HTML headless and inspect it** — don't trust that valid source = clean render. **Check layout legibility first (crossings, back-edges, aspect ratio — see Layout Legibility), then clipping/contrast.** Messy layout is a re-layout, not a re-style.
 
 **How to capture a screenshot to inspect:**
 - Headless Chrome: `chrome --headless --screenshot=/tmp/diag.png --window-size=1600,900 --default-background-color=FFFFFFFF file:///abs/path.html` (give the page a moment / use `--virtual-time-budget=3000` so JS-rendered frameworks finish).
@@ -180,6 +208,9 @@ A diagram that renders "mostly right" but clips a label or overlaps two nodes re
 | Artifact | What to look for | Typical fix |
 |---|---|---|
 | **Text clipping** | Labels cut off by node/box edges; ellipsis where there shouldn't be | Widen nodes, reduce font, wrap text, `overflow: visible` |
+| **Edge crossings / messy flow** | Lines crisscrossing; can't follow execution order | Re-layout: `considerModelOrder`, LAYER_SWEEP; feed nodes in execution order (Layout Legibility) |
+| **Back-edge cutting across** | A retry/async/loop edge slices the whole canvas | Style it dashed+curved+labelled, or split it into stub+marker |
+| **Bad aspect ratio** | Too wide (RIGHT) or too tall — fights the slide/fitView | Switch direction (RIGHT↔DOWN); split into multiple diagrams if L3-dense |
 | **Canvas clipping** | Nodes/edges cut at the diagram's outer edge | Fit-to-view (`fitView` / `d3 zoom-to-fit`); add padding/margin; grow viewBox |
 | **Node overlap** | Boxes on top of each other; unreadable | Increase ELK spacing (`spacing.nodeNode`, `layered.spacing.nodeNodeBetweenLayers`) |
 | **Edge issues** | Arrows crossing through nodes, missing arrowheads, overlapping labels | Reroute (orthogonal/curved), bump edge separation, offset edge labels |
@@ -191,12 +222,7 @@ A diagram that renders "mostly right" but clips a label or overlaps two nodes re
 | **Font not loaded** | Fallback/boxed glyphs (brand font failed to load) | Embed/CDN the font; add web-safe fallback |
 | **Overlapping at small sizes** | Fine at full size, collides in the slide thumbnail | Test at target display size, not just full res |
 
-**Mandatory per-element contrast pass (not a glance).** The gestalt "looks fine" scan misses low-contrast text — that's how white-on-cream labels ship as "clean." Instead, **enumerate every text element** (each node title, node subtitle, edge label, zone label, legend item) and for each write its `fill` color and its background, then judge legibility. A quick way to force it:
-- List them: *"node titles #fff on #0b3d6b ✓ · edge labels #12222f on #fff ✓ · CBS labels #fff on #f5efe0 ✗ FAIL"* — fix every ✗ before showing.
-- **Never rely on a library's default text color.** Set text `fill`/`color` **explicitly** for every element type (node header, node body, edge label, zone label). React Flow, D3, and Cytoscape all have inheritance/default surprises — a themed background with an unset label color is the classic invisible-text bug. Define all of them in your `:root`/style block and reference the token everywhere.
-- Re-check text specifically against **brand fills** (item 4 in Company Theming): a brand color used as a node/zone fill may collide with default dark or light text.
-
-**Rule:** if you can't screenshot/inspect in this environment, say so and ask the user to eyeball the preview specifically for clipping/overlap/contrast — don't claim it's clean unseen. When preview tooling is down (no browser/headless), state that explicitly and hand back the file path with "please open to verify" — do not silently substitute a screenshot you couldn't take.
+**Contrast:** don't eyeball it — use the **`checkContrast()` WCAG snippet in `reactflow-template.html`** (fill it with your actual text/bg token pairs; it logs any pair below 4.5:1 to the console). And **set every text color explicitly** (node header, body, edge label, zone label) — React Flow/D3/Cytoscape all have default-color surprises, so a themed background + unset label color = invisible text.
 
 ## Company Theming — ground the look on a brand
 

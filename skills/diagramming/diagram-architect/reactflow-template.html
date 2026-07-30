@@ -50,6 +50,25 @@ import 'https://esm.sh/@xyflow/react@12/dist/style.css';
 
 const elk = new ELK();
 
+// --- WCAG contrast auto-check: logs any text/bg pair below 4.5:1 to the console ---
+// Beats eyeballing. Add your text/bg token pairs; open devtools to see failures.
+function contrastRatio(hex1, hex2){
+  const lum = h => { const c=h.replace('#',''); const v=[0,2,4].map(i=>{
+    let x=parseInt(c.length===3?c[i/2]+c[i/2]:c.substr(i,2),16)/255;
+    return x<=.03928?x/12.92:((x+.055)/1.055)**2.4; }); return .2126*v[0]+.7152*v[1]+.0722*v[2]; };
+  const [a,b]=[lum(hex1),lum(hex2)].sort((x,y)=>y-x); return (a+.05)/(b+.05);
+}
+function checkContrast(pairs){ // [{name,text,bg}]
+  pairs.forEach(p=>{ const r=contrastRatio(p.text,p.bg);
+    console[r<4.5?'error':'log'](`contrast ${p.name}: ${r.toFixed(2)}:1 ${r<4.5?'✗ FAIL (<4.5)':'✓'} (${p.text} on ${p.bg})`); });
+}
+// Fill with the actual token pairs you used, then read the console during Render Validation:
+checkContrast([
+  { name:'node title',  text:'#ffffff', bg:'#0b3d6b' },
+  { name:'node body',   text:'#5a6b7b', bg:'#ffffff' },
+  { name:'zone label',  text:'#0b3d6b', bg:'#e8f2ff' },
+]);
+
 // ---- GROUNDED CONTENT: replace these three with your real diagram ----
 // Zones (parent/group nodes). Omit `zones` for a flat diagram.
 const ZONES = [
