@@ -88,9 +88,18 @@ Rule of thumb: **Mermaid for speed and standard types; React Flow for a premium,
 6. **Validate the render for clipping & artifacts** (see Render Validation) — screenshot the HTML headless, inspect for cut-off text/nodes, overflow, overlaps, broken edges. Fix before showing the user. Do NOT surface a preview you haven't visually checked.
 7. **Show the user the HTML output** (write the file, tell them to open it / open it for them). Present it as a **preview for approval**, not a final deliverable.
 8. **Iterate** on their feedback (layout, labels, colors, detail) — re-render **and re-validate** the HTML until they approve.
-9. **Only after approval, ask what to export as** (see Export options) and produce it — then **re-validate the exported artifact** (a PDF/PNG can clip even when the HTML looked fine).
+9. **Only after approval, ask what to export as** — including **bare diagram vs framed page** (see Export options) — produce it, then **re-validate the exported artifact** (a PDF/PNG can clip, or capture unwanted page chrome/frontmatter, even when the HTML looked fine).
 
 ### Export options (ask AFTER approval)
+
+**First ask: bare diagram, or the framed page?** The preview HTML often has chrome —
+page title, talking points, headers, legends, and the source may carry frontmatter.
+Always ask whether they want:
+- **Diagram only (bare)** — just the diagram graphic, nothing else. *(default for slides/embeds)*
+- **Framed** — diagram plus its surrounding page/labels/legend.
+
+Then the format:
+
 | Export | Best for | How |
 |---|---|---|
 | **PNG / JPG** | Slides, docs, Slack | Screenshot the HTML / headless-Chrome render / library `toImage()` |
@@ -99,6 +108,15 @@ Rule of thumb: **Mermaid for speed and standard types; React Flow for a premium,
 | **Standalone HTML** | Interactive share, living doc | The preview file itself |
 | **Mermaid/source in .md** | Editable living docs, GitHub | Emit the source block |
 | **Embed in deck/site** | Presentation | Hand back the SVG/PNG or an iframe-able HTML |
+
+**How to export the DIAGRAM ONLY (strip all chrome):**
+- **Isolate the element, not the page.** Export the diagram node itself, not `document.body`:
+  - Mermaid → grab the rendered `<svg>` (the `.mermaid svg`) and save that SVG alone; for PNG, screenshot with a CSS selector clip on the svg's bounding box.
+  - React Flow → `toSvg`/`toPng` targeting the `.react-flow__viewport` (call `fitView` first); hide `Panel`/`Controls`/`MiniMap`/`Background` before capture.
+  - D3/Cytoscape → serialize the `<svg>` / `cy.png({full:true})` — the graphic only.
+- **Never export a source file's YAML frontmatter.** If emitting Mermaid/source, strip any `---` frontmatter block and any surrounding prose — output only the fenced diagram code (or the raw SVG).
+- **Bare-page render for PDF/PNG:** render the diagram into a minimal HTML that contains *only* the diagram element (no `<h1>`, talking points, or legend) — or set `@media print { .chrome { display:none } }` and print just the diagram container — then headless-Chrome capture the clipped bounds, not the window.
+- **Trim whitespace/margins** to the diagram's true bounding box (`fitView`, tight `viewBox`, `--force-device-scale-factor` for crisp PNG). Re-validate the exported file for clipping (Render Validation).
 
 ## Quick Reference — Mermaid types
 
@@ -204,6 +222,8 @@ flowchart LR
 | Clipped/overlapping nodes shipped as final | Run Render Validation; fit-to-view + auto-layout spacing |
 | Export clips what HTML showed | Re-validate the exported PDF/PNG; set page size + export true bounds |
 | Claiming "looks good" without seeing it | If you can't screenshot, say so and ask the user to check clipping/overlap |
+| Export captured page chrome (title/talking points/legend) | Offer "diagram only (bare)" export; isolate the diagram element, not the page |
+| Emitted source with YAML frontmatter | Strip the `---` frontmatter + prose; output only the fenced diagram code or raw SVG |
 
 ## Real-World Impact
 
