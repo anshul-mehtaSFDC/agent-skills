@@ -86,11 +86,16 @@ prompt_single() { # $1=prompt $2..=options -> echoes chosen value
 # Result: PICK_RESULT (selected values, in order). Returns 1 if cancelled/empty.
 PICK_RESULT=()
 _pick_draw() { # uses dynamic scope: PICK_LABELS, checked, cur, n
-  local j box ptr
+  local j box ptr line cols avail
+  cols="$( (tput cols 2>/dev/null) || echo "${COLUMNS:-80}" )"; [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
   for ((j=0; j<n; j++)); do
     box="[ ]"; [[ ${checked[j]} -eq 1 ]] && box="[x]"
     ptr="  ";  [[ $j -eq $cur ]] && ptr="> "
-    printf '\r\033[2K%s%s %s\n' "$ptr" "$box" "${PICK_LABELS[j]}" >&2
+    line="${ptr}${box} ${PICK_LABELS[j]}"
+    # truncate to terminal width so each option stays on ONE row (wrapping breaks the redraw)
+    avail=$((cols-1)); (( avail < 10 )) && avail=10
+    (( ${#line} > avail )) && line="${line:0:avail-1}…"
+    printf '\r\033[2K%s\n' "$line" >&2
   done
 }
 pick_multi() { # $1=title
