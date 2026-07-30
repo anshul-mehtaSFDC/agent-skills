@@ -1,6 +1,6 @@
 ---
 name: diagram-architect
-description: "Use when the user asks to create, draw, generate, or design any diagram — data architecture, solution/system architecture, data flow, sequence, ER/data model, deployment topology, network, state machine, org/entity relationship, RAG/AI pipeline, or process/flow chart. Also use when they want diagrams styled/branded to a company theme (brand colors, fonts, logo), or rendered as polished HTML with React Flow / Mermaid / D3. Runs a short intake interview (type, detail, grounding, theme), renders an HTML preview for approval, then exports to the format they choose — so the diagram matches what was built and the brand, not a generic template."
+description: "Use when the user asks to create, draw, generate, or design any diagram — data architecture, solution/system architecture, data flow, sequence, ER/data model, deployment topology, network, state machine, org/entity relationship, RAG/AI pipeline, or process/flow chart. Also use when they want diagrams styled/branded to a company theme (brand colors, fonts, logo extracted from a website/logo/repo), or rendered as polished HTML with React Flow + ELK / Mermaid / D3. Runs a short intake interview (type, detail, grounding, theme), renders an HTML preview (in-IDE where possible) for approval, then exports to the format they choose — so the diagram matches what was built and the brand, not a generic Mermaid template."
 ---
 
 # Diagram Architect
@@ -54,39 +54,50 @@ The single most important question. Options:
 
 ### 4. Visual theme / branding
 How should it look? Ground the theme the same way you ground the content:
-- **Company brand** — name a company or paste a brand guide / website URL / an existing branded deck or screenshot / a logo image. → **Extract the theme before drawing** (see Company Theming below). Build a reusable theme spec so *every* diagram in the set looks identical.
+- **Company brand** — a company website URL, brand-guide URL, an existing branded deck/screenshot, a logo image, or a repo path with brand assets/CSS. → **You MUST extract the theme (Company Theming) before drawing.**
 - **A prior diagram / this project's existing style** (e.g. a `Diagram_Prompts.html` or a previous slide) → reuse its palette.
 - **Neutral / default** — clean modern default (one dark heading color + one bright accent).
 - **User specifies** — explicit hex colors / font.
 
-Apply the chosen theme consistently across a whole diagram set — a mismatched palette between slides reads as unfinished.
+**MANDATORY when a brand is chosen — do NOT skip and do NOT silently use neutral:**
+1. If the brand source is a **URL** → call **WebFetch** on it. If a **file/repo/logo** → **Read** it. A company *name with no source* is NOT enough — ask for a URL/logo/repo, or state you're using neutral and why. Never guess a palette from memory.
+2. **Extract and echo the theme spec back to the user** before drawing — the actual hex colors, font, and logo you found (e.g. "Using #E31937 red / #000 / Helvetica from tesla.com"). If you couldn't extract them, say so explicitly rather than defaulting.
+3. Only draw once the palette is grounded. Apply it to **every** diagram in the set.
 
-## Render Engine — pick the best JS framework for the diagram type
+> Skipping extraction or defaulting to neutral without saying so is the #1 branding failure. If a brand was requested, the render MUST visibly use the extracted colors/font.
 
-For **visually appealing** output, render an interactive HTML using the framework best suited to the diagram type. Default to **Mermaid** (fast, no build step, themable) unless the type below calls for a richer library. Load libraries from a CDN in a self-contained HTML file.
+## Render Engine — pick the best framework (Mermaid is NOT the default for architecture)
 
-| Diagram type | Best framework | Why | CDN |
+Render an interactive HTML with the framework best suited to the diagram. **Mermaid is a fallback for small/standard diagrams, not the default for architecture.** Its dagre auto-layout produces ugly results on dense diagrams — huge whitespace gaps, long crossing edges, and clipped node titles. If the diagram is a real system/solution architecture or has more than ~10 nodes or grouped zones, **use React Flow (with ELK layout), not Mermaid.**
+
+| Diagram type | Use this | Why | Load via |
 |---|---|---|---|
-| Solution/system architecture, node-graphs, custom nodes | **React Flow** | Beautiful custom node components, handles, auto-layout, pan/zoom; best for polished architecture | `reactflow` (+ React) via esm.sh/unpkg |
-| Data flow, process, RAG pipeline, quick architecture | **Mermaid** | Zero-build, text-driven, themable; great default | `mermaid` (jsdelivr) |
-| Data model / ERD | **Mermaid `erDiagram`** or **dbdiagram-style** | Native entities + cardinality | `mermaid` |
+| **Solution/system architecture, >10 nodes, grouped zones, "hero" diagram** | **React Flow + ELK** (`elkjs`) | Custom styled nodes, grouped containers, orthogonal edge routing, controlled layout — looks designed | `reactflow` + React + `elkjs` via esm.sh/unpkg |
+| Data flow, process, RAG pipeline (small, linear) | **Mermaid** *(or React Flow if it needs to look premium)* | Zero-build, fine when it's small | `mermaid` (jsdelivr) |
+| Data model / ERD | **Mermaid `erDiagram`** | Native entities + cardinality | `mermaid` |
 | Sequence | **Mermaid `sequenceDiagram`** | Purpose-built, clean | `mermaid` |
-| State machine | **Mermaid `stateDiagram-v2`** or **XState viz** | Transitions; XState if it's a real state machine spec | `mermaid` |
-| Large graphs, network, force/relationship maps | **Cytoscape.js** or **D3** | Handles many nodes, layouts, interactivity | `cytoscape` / `d3` |
+| State machine | **Mermaid `stateDiagram-v2`** or **XState viz** | Transitions | `mermaid` |
+| Large graphs, network, force/relationship maps | **Cytoscape.js** (with `elk`/`cola`) or **D3** | Scales to many nodes, real layouts | `cytoscape` / `d3` |
 | Timeline / Gantt | **Mermaid `gantt`** or **vis-timeline** | Time axes | `mermaid` / `vis-timeline` |
-| Org chart / tree / mind map | **Mermaid `mindmap`** or **D3 tree** | Hierarchies | `mermaid` / `d3` |
+| Org chart / tree / mind map | **D3 tree** or **Mermaid `mindmap`** | Hierarchies | `d3` / `mermaid` |
 
-Rule of thumb: **Mermaid for speed and standard types; React Flow for a premium, custom-styled architecture hero diagram; Cytoscape/D3 when node count or interactivity is high.** Match the chosen theme spec (Company Theming) into the framework's styling.
+**Decision rule:**
+- **> ~10 nodes, OR grouped zones/subgraphs, OR the user wants it to look polished → React Flow + ELK** (or Cytoscape+ELK for very large graphs). Do NOT use plain Mermaid `flowchart` here.
+- **Small, linear, throwaway, or a living-doc `.md` → Mermaid** is fine.
+- When unsure for architecture, **choose React Flow.** It's the difference between "auto-generated" and "designed."
+
+**Making React Flow look good (not the default gray boxes):** use **ELK layered layout** (`elk.direction: RIGHT`, decent `nodeNode`/`layered.spacing` so nodes don't collide); **custom node types** with the brand palette (rounded cards, soft shadow, header bar, icon); **grouped/parent nodes** for zones with a tinted background + label; **smoothstep/orthogonal edges** with arrowheads and edge labels; `fitView` on load; size each node to its text so **titles never clip**. Match the extracted theme spec (Company Theming) into the node/edge styles.
 
 ## Workflow — preview → approve → export
 
 1. **Interview** (the 4 questions above). Batch them. Do NOT ask export format yet.
-2. **Ground:** read the named file / query the system / review the prior diagram. Extract real names, counts, relationships. Do not proceed on memory if a source exists. **If a company theme was named, extract the theme spec now** (see Company Theming).
+2. **Ground the CONTENT** — read the named file / query the system / review the prior diagram. Extract real names, counts, relationships. Do not proceed on memory if a source exists.
+2b. **Ground the THEME (if a brand was chosen)** — **actually call WebFetch on the URL, or Read the logo/repo/CSS.** Extract hex colors + font + logo and **echo them back to the user.** Do NOT skip this and do NOT silently fall back to neutral (see Company Theming). If no source was given, ask for one or state you're using neutral.
 3. **Pick the render engine** for the diagram type (table above).
-4. **Build a self-contained HTML** rendering the diagram with that framework + the theme spec. **Label edges** with what flows (protocol, trigger, cadence, "batch" vs "live") — unlabeled arrows are the #1 clarity loss.
-5. **Verify against the source** — every box/edge traces to a grounded fact. Flag anything inferred or proposed-vs-built.
+4. **Build a self-contained HTML** rendering the diagram with that framework + the extracted theme spec (the brand colors/font must be visibly applied). **Label edges** with what flows (protocol, trigger, cadence, "batch" vs "live") — unlabeled arrows are the #1 clarity loss.
+5. **Verify against the source** — every box/edge traces to a grounded fact; the brand palette is actually applied. Flag anything inferred or proposed-vs-built.
 6. **Validate the render for clipping & artifacts** (see Render Validation) — screenshot the HTML headless, inspect for cut-off text/nodes, overflow, overlaps, broken edges. Fix before showing the user. Do NOT surface a preview you haven't visually checked.
-7. **Show the user the HTML output** (write the file, tell them to open it / open it for them). Present it as a **preview for approval**, not a final deliverable.
+7. **Show the user the HTML output** — write the file and **open a live preview in the IDE where possible** (see IDE Preview), else open in the browser / tell them the path. Present it as a **preview for approval**, not a final deliverable.
 8. **Iterate** on their feedback (layout, labels, colors, detail) — re-render **and re-validate** the HTML until they approve.
 9. **Only after approval, ask what to export as** — including **bare diagram vs framed page** (see Export options) — produce it, then **re-validate the exported artifact** (a PDF/PNG can clip, or capture unwanted page chrome/frontmatter, even when the HTML looked fine).
 
@@ -118,10 +129,20 @@ Then the format:
 - **Bare-page render for PDF/PNG:** render the diagram into a minimal HTML that contains *only* the diagram element (no `<h1>`, talking points, or legend) — or set `@media print { .chrome { display:none } }` and print just the diagram container — then headless-Chrome capture the clipped bounds, not the window.
 - **Trim whitespace/margins** to the diagram's true bounding box (`fitView`, tight `viewBox`, `--force-device-scale-factor` for crisp PNG). Re-validate the exported file for clipping (Render Validation).
 
+## IDE Preview — show the render in-editor where possible
+
+Prefer showing the live preview **inside the IDE** so the user doesn't leave the editor:
+- **VS Code / Cursor:** write the `.html` and open it — `code --reuse-window <file>` or the built-in **"Open with Live Preview"/Simple Browser** (`workbench.action.webview` / the Live Preview extension) renders HTML in a side panel. For a Mermaid `.md`, the built-in Markdown preview (`markdown.showPreview`) renders diagrams. Suggest the exact command if you can't trigger it directly.
+- **JetBrains:** open the HTML with the built-in browser preview.
+- **Fallback (any IDE):** open in the system browser (`open`/`xdg-open`/`start <file>`) and print the file path so the user can click it.
+- Always still write the file to disk so it persists and can be exported later.
+
+Tell the user which preview you opened (or the path + one-line "open this to preview"). Then treat it as the approval gate (workflow step 7).
+
 ## Quick Reference — Mermaid types
 
 ```
-flowchart LR / TD      → architecture, data flow, process, RAG pipeline
+flowchart LR / TD      → small/linear flows only (NOT dense architecture — use React Flow+ELK)
 sequenceDiagram        → API calls, handshakes, request/response
 erDiagram              → data model / ERD (entities + cardinality)
 stateDiagram-v2        → state machines / lifecycles
@@ -217,7 +238,9 @@ flowchart LR
 | Inconsistent theme across a set | Save one theme spec; apply identically to every diagram |
 | Asking export format up front | Ask it only AFTER the user approves the HTML preview |
 | Exporting before the user has seen it | Always show the HTML preview and get approval first |
-| Defaulting to Mermaid for a premium hero diagram | Use React Flow (or D3/Cytoscape) when the look/interactivity warrants it |
+| Dense architecture rendered in plain Mermaid (ugly gaps, crossing edges, clipped titles) | Use React Flow + ELK for >10 nodes / grouped zones / hero diagrams — Mermaid is not the default here |
+| Brand requested but render came out neutral | You didn't extract the theme — MUST WebFetch the URL / Read the logo/repo, echo the palette, then apply it |
+| Extracted a theme but didn't apply it | The render must visibly use the brand hex/font; verify in step 5 |
 | Assuming valid source = clean render | Screenshot and inspect pixels; validate for clipping/overlap before showing |
 | Clipped/overlapping nodes shipped as final | Run Render Validation; fit-to-view + auto-layout spacing |
 | Export clips what HTML showed | Re-validate the exported PDF/PNG; set page size + export true bounds |
