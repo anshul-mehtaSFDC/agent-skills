@@ -52,10 +52,15 @@ cd agent-skills
 ./install.sh            # interactive: pick tool, scope, and skills
 ```
 
-The interactive flow asks three things (**tools and skills are multi-select**):
-1. **Tool(s)** — any of `claude` / `cursor` / `codex`, or `all` (comma-separated numbers/names)
+The interactive flow asks three things. **Tools and skills use a checkbox picker** —
+`↑`/`↓` (or `j`/`k`) to move, **SPACE to toggle**, `a` to select all, ENTER to confirm,
+`q` to cancel:
+1. **Tool(s)** — check any of Claude Code / Cursor / Codex
 2. **Scope** — `project` (one repo) / `global` (all your projects)
-3. **Skills** — `all`, or a comma-separated list (menu is grouped by category)
+3. **Skills** — check any (menu grouped by category with descriptions)
+
+> If run without a terminal (piped/CI), it falls back to a text prompt (comma-separated
+> numbers/names, or `all`). Force the fallback with `AGENT_SKILLS_NO_TUI=1`.
 
 Non-interactive (CI / scripting) — `--tool` and `--skills` both accept comma lists or `all`:
 ```bash

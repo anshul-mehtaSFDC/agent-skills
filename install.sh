@@ -68,6 +68,10 @@ if [[ "$DO_LIST" == "true" ]]; then
 fi
 
 # ---- interactive helpers ----
+
+# Is stderr a real terminal we can draw the TUI on?
+have_tui() { [[ -t 2 && -r /dev/tty && -z "${AGENT_SKILLS_NO_TUI:-}" ]]; }
+
 prompt_single() { # $1=prompt $2..=options -> echoes chosen value
   local p="$1"; shift; local opts=("$@") i sel
   echo "$p" >&2
@@ -77,32 +81,71 @@ prompt_single() { # $1=prompt $2..=options -> echoes chosen value
   echo "${opts[$((sel-1))]}"
 }
 
-# Multi-select from a fixed option list. Accepts 'all', or comma/space-separated
-# numbers and/or names. Echoes chosen values space-separated.
-prompt_multi() { # $1=prompt $2..=options
-  local p="$1"; shift; local opts=("$@") i raw tok chosen=()
-  echo "$p  (comma-separated numbers/names, or 'all')" >&2
-  for i in "${!opts[@]}"; do echo "  $((i+1))) ${opts[$i]}" >&2; done
+# --- checkbox multi-select TUI (arrow keys / j-k, SPACE toggle, a=all, enter=confirm) ---
+# Caller sets: PICK_OPTS (values) and PICK_LABELS (display text, same length).
+# Result: PICK_RESULT (selected values, in order). Returns 1 if cancelled/empty.
+PICK_RESULT=()
+_pick_draw() { # uses dynamic scope: PICK_LABELS, checked, cur, n
+  local j box ptr
+  for ((j=0; j<n; j++)); do
+    box="[ ]"; [[ ${checked[j]} -eq 1 ]] && box="[x]"
+    ptr="  ";  [[ $j -eq $cur ]] && ptr="> "
+    printf '\r\033[2K%s%s %s\n' "$ptr" "$box" "${PICK_LABELS[j]}" >&2
+  done
+}
+pick_multi() { # $1=title
+  local title="$1"
+  local n=${#PICK_OPTS[@]} cur=0 checked=() j key rest
+  for ((j=0; j<n; j++)); do checked[j]=0; done
+  printf '%s\n' "$title  (↑/↓ move · SPACE toggle · a=all · ENTER confirm · q=cancel)" >&2
+  _pick_draw
+  while true; do
+    IFS= read -rsn1 key </dev/tty || break
+    if [[ $key == $'\033' ]]; then IFS= read -rsn2 rest </dev/tty || true; key+="$rest"; fi
+    case "$key" in
+      $'\033[A'|k) ((cur>0)) && ((cur--));;
+      $'\033[B'|j) ((cur<n-1)) && ((cur++));;
+      ' ') checked[cur]=$((1-checked[cur]));;
+      a|A) local all1=1; for ((j=0;j<n;j++)); do [[ ${checked[j]} -eq 0 ]] && all1=0; done
+           for ((j=0;j<n;j++)); do checked[j]=$((1-all1)); done;;
+      ''|$'\n') break;;                        # ENTER
+      q|Q) PICK_RESULT=(); printf '\033[%dA' "$n" >&2; _pick_draw; return 1;;
+    esac
+    printf '\033[%dA' "$n" >&2   # move cursor back up to redraw in place
+    _pick_draw
+  done
+  PICK_RESULT=()
+  for ((j=0; j<n; j++)); do [[ ${checked[j]} -eq 1 ]] && PICK_RESULT+=("${PICK_OPTS[j]}"); done
+  [[ ${#PICK_RESULT[@]} -gt 0 ]] || return 1
+}
+
+# Plain fallback (no TTY): comma/space-separated numbers/names, or 'all'.
+# Caller sets PICK_OPTS; result in PICK_RESULT.
+pick_plain() { # $1=title
+  local title="$1"; local i raw tok chosen=()
+  echo "$title  (comma-separated numbers/names, or 'all')" >&2
+  for i in "${!PICK_OPTS[@]}"; do echo "  $((i+1))) ${PICK_LABELS[$i]}" >&2; done
   read -r raw </dev/tty
   [[ -n "$raw" ]] || die "Nothing selected"
-  if [[ "$raw" == "all" ]]; then echo "${opts[*]}"; return; fi
+  if [[ "$raw" == "all" ]]; then PICK_RESULT=("${PICK_OPTS[@]}"); return; fi
   raw="${raw//,/ }"
   for tok in $raw; do
     if [[ "$tok" =~ ^[0-9]+$ ]]; then
-      (( tok>=1 && tok<=${#opts[@]} )) || die "Invalid number: $tok"
-      chosen+=("${opts[$((tok-1))]}")
+      (( tok>=1 && tok<=${#PICK_OPTS[@]} )) || die "Invalid number: $tok"
+      chosen+=("${PICK_OPTS[$((tok-1))]}")
     else
-      local ok="false"
-      for o in "${opts[@]}"; do [[ "$o" == "$tok" ]] && { chosen+=("$tok"); ok="true"; }; done
+      local ok="false"; for o in "${PICK_OPTS[@]}"; do [[ "$o" == "$tok" ]] && { chosen+=("$tok"); ok="true"; }; done
       [[ "$ok" == "true" ]] || die "Invalid option: $tok"
     fi
   done
-  # de-dupe preserving order
   local seen=() out=()
-  for c in "${chosen[@]}"; do
-    case " ${seen[*]:-} " in *" $c "*) ;; *) seen+=("$c"); out+=("$c");; esac
-  done
-  echo "${out[*]}"
+  for c in "${chosen[@]}"; do case " ${seen[*]:-} " in *" $c "*) ;; *) seen+=("$c"); out+=("$c");; esac; done
+  PICK_RESULT=("${out[@]}")
+}
+
+# Dispatch: TUI if terminal, else plain. Sets PICK_RESULT from PICK_OPTS/PICK_LABELS.
+pick() { # $1=title
+  if have_tui; then pick_multi "$1" || die "Cancelled"; else pick_plain "$1"; fi
 }
 
 # ---- resolve TOOLS (multi) ----
@@ -116,7 +159,10 @@ if [[ -n "$TOOLSEL" ]]; then
     done
   fi
 else
-  read -ra TOOLS <<< "$(prompt_multi "Install for which tool(s)?" "${ALL_TOOLS[@]}")"
+  PICK_OPTS=("${ALL_TOOLS[@]}")
+  PICK_LABELS=("Claude Code" "Cursor" "Codex")
+  pick "Install for which tool(s)?"
+  TOOLS=("${PICK_RESULT[@]}")
 fi
 [[ ${#TOOLS[@]} -gt 0 ]] || die "No tool selected"
 
@@ -147,11 +193,14 @@ resolve_skills() { # $1=raw selection string
 if [[ -n "$SEL" ]]; then
   resolve_skills "$SEL"
 else
-  echo "" >&2; echo "Available skills:" >&2; print_catalog >&2; echo "" >&2
-  echo "Enter skills to install: 'all', or comma-separated names (e.g. diagram-architect,foo)" >&2
-  read -r SEL </dev/tty
-  [[ -n "$SEL" ]] || die "Nothing selected"
-  resolve_skills "$SEL"
+  # Build option/label arrays (labels show category + description) sorted by category.
+  PICK_OPTS=(); PICK_LABELS=()
+  while IFS=$'\t' read -r c n i; do
+    PICK_OPTS+=("$n")
+    PICK_LABELS+=("$n  [$c] — $(desc_of "${PATHS[$i]}")")
+  done < <(for i in "${!NAMES[@]}"; do printf '%s\t%s\t%s\n' "${CATS[$i]}" "${NAMES[$i]}" "$i"; done | sort)
+  pick "Which skill(s) to install?"
+  SELECTED=("${PICK_RESULT[@]}")
 fi
 
 # ---- per-tool destination / writer / remover (tool passed as $1) ----
