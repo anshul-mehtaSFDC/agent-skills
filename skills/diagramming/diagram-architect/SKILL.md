@@ -11,6 +11,8 @@ Produce **accurate, presentation-quality diagrams** by interviewing the user fir
 
 **Core principle:** Ground first, draw second, **preview → approve → then export**. Don't ask export format up front — ask it only once the user likes the rendered diagram.
 
+**REQUIRED SUB-SKILL:** For any non-trivial system (more than a handful of obvious boxes), run **`system-discovery` first** to produce a confirmed entity + connection inventory. A diagram's #1 defect is a missing or wrong *connection* — discovery is what prevents it. Draw nodes from the inventory's ENTITIES and edges from its CONNECTIONS; don't invent, don't omit. Skip discovery only for a trivial diagram you can ground in one glance.
+
 ## When to Use
 
 - User says: "create a diagram", "draw the architecture", "flow chart", "data flow", "sequence diagram", "ER diagram", "deployment topology", "generate a diagram for X".
@@ -72,7 +74,7 @@ Do not write a single line of diagram HTML until you have **typed answers to all
 
 1. **Type sanity check.** Does the chosen diagram type match the *request word*? If the user said "flow", "ordering", "sequence", "steps", "over time", "handshake" but you're about to draw an **architecture graph**, STOP — a **sequence or flowchart** is probably right. State: *"Request says '<word>' → using <type> because <reason>."* Challenge the initial type; don't treat it as settled.
 2. **Theme grounding.** Write the literal palette you will use AND where each value came from: *"--primary #E31937 ← fetched tesla.com/…"*. If any value is from memory/guess → you have NOT grounded it: go WebFetch/Read the source now, or explicitly say "using neutral, no brand source given." **You may not proceed with guessed brand colors.**
-3. **Grounding source named** for the content (file/system/prior diagram/verbal/design-only).
+3. **Inventory confirmed.** State the entity count and connection count from `system-discovery`, and that the user confirmed it (or explicitly waived discovery for a trivial diagram). Every node/edge you draw traces to a row in that inventory — no invented components, no dropped connections.
 4. **Engine + detail level** chosen (per tables below).
 
 If you cannot fill in #1 and #2 concretely, you are not ready to draw. No exceptions, no "I'll fix it on the next pass."
@@ -106,7 +108,8 @@ If you cannot fill in #1 and #2 concretely, you are not ready to draw. No except
 ## Workflow — preview → approve → export
 
 1. **Interview** (the 4 questions above). Batch them. Do NOT ask export format yet.
-2. **Ground the CONTENT** — read the named file / query the system / review the prior diagram. Extract real names, counts, relationships. Do not proceed on memory if a source exists.
+1b. **Discover the system** (non-trivial diagrams) — run **`system-discovery`**: read all relevant sources, build the entity + connection inventory, gap-hunt, and **confirm it with the user.** The diagram draws from this inventory. Skip only for a trivially small diagram.
+2. **Ground the CONTENT** — this is satisfied by the discovery inventory (entities/connections with their sources). If you skipped discovery, still read the named file / query the system; never proceed on memory when a source exists.
 2b. **Ground the THEME (if a brand was chosen)** — **actually call WebFetch on the URL, or Read the logo/repo/CSS.** Extract hex colors + font + logo and **echo them back to the user.** Do NOT skip this and do NOT silently fall back to neutral (see Company Theming). If no source was given, ask for one or state you're using neutral.
 2c. **Clear the Pre-Render Gate** — post typed answers to all four gate items (type sanity, grounded palette, content source, engine+detail). Do not write HTML until this is in your reply.
 3. **Pick the render engine** for the diagram type (table above).
@@ -239,6 +242,8 @@ You can theme an entire diagram set to a company's brand so it looks like it cam
 | Using Mermaid at all | Banned — its auto-layout isn't presentable. Use React Flow + ELK (or Cytoscape/D3). Start from `reactflow-template.html` |
 | Theming from memory / guessed brand colors | Clear the Pre-Render Gate: every palette value must name its source; guessed = not grounded, go fetch it |
 | Drawing the type the user first named without challenge | Pre-Render Gate #1: if the request word ("flow"/"sequence") conflicts with the type, propose the better one |
+| Drawing before mapping the system | Run `system-discovery` first; draw from its confirmed entity + connection inventory |
+| Missing a real connection / inventing one | Every edge traces to a CONNECTION row; every node to an ENTITY row — discovery's gap-hunt catches omissions |
 | Passing Render Validation with a skim | Do the per-element contrast pass — list every text element's fill vs background; fix every ✗ |
 | Unset text color on a themed background (invisible text) | Set text fill/color EXPLICITLY for node header/body, edge labels, zone labels — never rely on library defaults |
 | Claiming validated when preview tooling was down | Say you couldn't verify; hand back the path with "please open to check" — don't fake a screenshot |
