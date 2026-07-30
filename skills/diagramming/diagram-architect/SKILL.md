@@ -1,6 +1,6 @@
 ---
 name: diagram-architect
-description: "Use when the user asks to create, draw, generate, or design any diagram — data architecture, solution/system architecture, data flow, sequence, ER/data model, deployment topology, network, state machine, org/entity relationship, RAG/AI pipeline, or process/flow chart. Also use when they want diagrams styled/branded to a company theme (brand colors, fonts, logo extracted from a website/logo/repo), or rendered as polished HTML with React Flow + ELK / Mermaid / D3. Runs a short intake interview (type, detail, grounding, theme), renders an HTML preview (in-IDE where possible) for approval, then exports to the format they choose — so the diagram matches what was built and the brand, not a generic Mermaid template."
+description: "Use when the user asks to create, draw, generate, or design any diagram — data architecture, solution/system architecture, data flow, sequence, ER/data model, deployment topology, network, state machine, org/entity relationship, RAG/AI pipeline, or process/flow chart. Also use when they want diagrams styled/branded to a company theme (brand colors, fonts, logo extracted from a website/logo/repo), or rendered as polished HTML with React Flow + ELK / D3 / Cytoscape. Runs a short intake interview (type, detail, grounding, theme), renders an HTML preview (in-IDE where possible) for approval, then exports to the format they choose — so the diagram is presentation-grade and on-brand, not an auto-generated template."
 ---
 
 # Diagram Architect
@@ -66,33 +66,49 @@ How should it look? Ground the theme the same way you ground the content:
 
 > Skipping extraction or defaulting to neutral without saying so is the #1 branding failure. If a brand was requested, the render MUST visibly use the extracted colors/font.
 
-## Render Engine — pick the best framework (Mermaid is NOT the default for architecture)
+## Pre-Render Gate (STOP — answer these out loud before writing any HTML)
 
-Render an interactive HTML with the framework best suited to the diagram. **Mermaid is a fallback for small/standard diagrams, not the default for architecture.** Its dagre auto-layout produces ugly results on dense diagrams — huge whitespace gaps, long crossing edges, and clipped node titles. If the diagram is a real system/solution architecture or has more than ~10 nodes or grouped zones, **use React Flow (with ELK layout), not Mermaid.**
+Do not write a single line of diagram HTML until you have **typed answers to all four** in your reply. This is a gate, not a reminder — skipping it is the failure mode this skill exists to prevent. Iteration 3 is too late.
 
-| Diagram type | Use this | Why | Load via |
-|---|---|---|---|
-| **Solution/system architecture, >10 nodes, grouped zones, "hero" diagram** | **React Flow + ELK** (`elkjs`) | Custom styled nodes, grouped containers, orthogonal edge routing, controlled layout — looks designed | `reactflow` + React + `elkjs` via esm.sh/unpkg |
-| Data flow, process, RAG pipeline (small, linear) | **Mermaid** *(or React Flow if it needs to look premium)* | Zero-build, fine when it's small | `mermaid` (jsdelivr) |
-| Data model / ERD | **Mermaid `erDiagram`** | Native entities + cardinality | `mermaid` |
-| Sequence | **Mermaid `sequenceDiagram`** | Purpose-built, clean | `mermaid` |
-| State machine | **Mermaid `stateDiagram-v2`** or **XState viz** | Transitions | `mermaid` |
-| Large graphs, network, force/relationship maps | **Cytoscape.js** (with `elk`/`cola`) or **D3** | Scales to many nodes, real layouts | `cytoscape` / `d3` |
-| Timeline / Gantt | **Mermaid `gantt`** or **vis-timeline** | Time axes | `mermaid` / `vis-timeline` |
-| Org chart / tree / mind map | **D3 tree** or **Mermaid `mindmap`** | Hierarchies | `d3` / `mermaid` |
+1. **Type sanity check.** Does the chosen diagram type match the *request word*? If the user said "flow", "ordering", "sequence", "steps", "over time", "handshake" but you're about to draw an **architecture graph**, STOP — a **sequence or flowchart** is probably right. State: *"Request says '<word>' → using <type> because <reason>."* Challenge the initial type; don't treat it as settled.
+2. **Theme grounding.** Write the literal palette you will use AND where each value came from: *"--primary #E31937 ← fetched tesla.com/…"*. If any value is from memory/guess → you have NOT grounded it: go WebFetch/Read the source now, or explicitly say "using neutral, no brand source given." **You may not proceed with guessed brand colors.**
+3. **Grounding source named** for the content (file/system/prior diagram/verbal/design-only).
+4. **Engine + detail level** chosen (per tables below).
 
-**Decision rule:**
-- **> ~10 nodes, OR grouped zones/subgraphs, OR the user wants it to look polished → React Flow + ELK** (or Cytoscape+ELK for very large graphs). Do NOT use plain Mermaid `flowchart` here.
-- **Small, linear, throwaway, or a living-doc `.md` → Mermaid** is fine.
-- When unsure for architecture, **choose React Flow.** It's the difference between "auto-generated" and "designed."
+If you cannot fill in #1 and #2 concretely, you are not ready to draw. No exceptions, no "I'll fix it on the next pass."
 
-**Making React Flow look good (not the default gray boxes):** use **ELK layered layout** (`elk.direction: RIGHT`, decent `nodeNode`/`layered.spacing` so nodes don't collide); **custom node types** with the brand palette (rounded cards, soft shadow, header bar, icon); **grouped/parent nodes** for zones with a tinted background + label; **smoothstep/orthogonal edges** with arrowheads and edge labels; `fitView` on load; size each node to its text so **titles never clip**. Match the extracted theme spec (Company Theming) into the node/edge styles.
+## Render Engine — pick the best framework (do NOT use Mermaid)
+
+**Mermaid is banned in this skill.** Its auto-layout produces non-presentable output — cavernous whitespace, edges crossing the whole canvas, and clipped node titles. Always render an interactive, self-contained HTML with a real layout/graphics library. **React Flow + ELK is the workhorse for anything structural.** Load libraries from a CDN (esm.sh / unpkg / jsdelivr).
+
+| Diagram type | Use this | Why |
+|---|---|---|
+| **Solution/system architecture, data flow, deployment, RAG pipeline, process — any node+edge diagram** | **React Flow + ELK** (`@xyflow/react` + `elkjs`) | Custom styled nodes, grouped zone containers, ELK layered layout, orthogonal edge routing, `fitView` — looks designed |
+| **Large graphs / networks** (many nodes, dense relationships) | **Cytoscape.js** + ELK/cola layout | Scales to hundreds of nodes with real graph layouts |
+| **Data model / ERD** | **React Flow** (custom table nodes w/ field rows + FK edges) or **D3** | Full control of table styling + cardinality markers |
+| **Sequence** | **D3** (or hand-authored SVG) — lifelines + activation bars + arrows | Precise ordered layout |
+| **State machine** | **React Flow + ELK** (states as nodes, labeled transition edges) | Same node/edge model, styled |
+| **Timeline / Gantt** | **vis-timeline** or **D3** | Real time axis |
+| **Org chart / tree / mind map** | **D3 hierarchy (tree/cluster)** | Proper hierarchical layout |
+
+**Decision rule:** if it's nodes-and-edges → **React Flow + ELK**. If it's a huge graph → **Cytoscape + ELK**. If it's time/hierarchy/sequence → the dedicated lib above. Never fall back to Mermaid, even for a "quick" diagram — a small React Flow diagram is just as fast to author and looks far better.
+
+**Making React Flow look good (not the default gray boxes):**
+- **ELK layered layout** — `elk.algorithm: 'layered'`, `elk.direction: 'RIGHT'` (or DOWN), generous `elk.spacing.nodeNode` (~60) and `elk.layered.spacing.nodeNodeBetweenLayers` (~90) so nothing collides.
+- **Custom node types** styled with the brand palette — rounded cards, soft shadow, a colored header bar, optional icon; **size each node to its text so titles never clip** (measure/estimate width from label length, set node width; multi-line wrap for long labels).
+- **Grouped/parent nodes** for zones/layers — tinted background (`--zone-bg`) + a zone label; children laid out inside via ELK hierarchy.
+- **Edges:** `smoothstep`/orthogonal, arrowheads on every edge, readable edge labels (protocol/trigger/cadence) with a small background so they don't sit on lines.
+- `fitView` on load with padding; a legend if edge types differ.
+- Apply the extracted theme spec (Company Theming) to node/edge/zone styles.
+
+**Reference implementation:** a self-contained React Flow + ELK HTML skeleton (CDN imports, ELK layout, branded custom node, zone groups) is in [`reactflow-template.html`](reactflow-template.html) in this skill's folder — adapt it: swap the theme tokens, nodes, and edges for the grounded content. Start from it rather than hand-rolling boilerplate.
 
 ## Workflow — preview → approve → export
 
 1. **Interview** (the 4 questions above). Batch them. Do NOT ask export format yet.
 2. **Ground the CONTENT** — read the named file / query the system / review the prior diagram. Extract real names, counts, relationships. Do not proceed on memory if a source exists.
 2b. **Ground the THEME (if a brand was chosen)** — **actually call WebFetch on the URL, or Read the logo/repo/CSS.** Extract hex colors + font + logo and **echo them back to the user.** Do NOT skip this and do NOT silently fall back to neutral (see Company Theming). If no source was given, ask for one or state you're using neutral.
+2c. **Clear the Pre-Render Gate** — post typed answers to all four gate items (type sanity, grounded palette, content source, engine+detail). Do not write HTML until this is in your reply.
 3. **Pick the render engine** for the diagram type (table above).
 4. **Build a self-contained HTML** rendering the diagram with that framework + the extracted theme spec (the brand colors/font must be visibly applied). **Label edges** with what flows (protocol, trigger, cadence, "batch" vs "live") — unlabeled arrows are the #1 clarity loss.
 5. **Verify against the source** — every box/edge traces to a grounded fact; the brand palette is actually applied. Flag anything inferred or proposed-vs-built.
@@ -113,53 +129,30 @@ Then the format:
 
 | Export | Best for | How |
 |---|---|---|
-| **PNG / JPG** | Slides, docs, Slack | Screenshot the HTML / headless-Chrome render / library `toImage()` |
-| **SVG** | Crisp scaling, Figma, print | Mermaid/D3/Cytoscape export SVG; React Flow via `toSvg` |
+| **PNG / JPG** | Slides, docs, Slack | Headless-Chrome render / library `toPng()` |
+| **SVG** | Crisp scaling, Figma, print | React Flow `toSvg`; D3/Cytoscape serialize `<svg>` |
 | **PDF** | Handout, one-pager | Headless Chrome `--print-to-pdf` on the HTML |
 | **Standalone HTML** | Interactive share, living doc | The preview file itself |
-| **Mermaid/source in .md** | Editable living docs, GitHub | Emit the source block |
 | **Embed in deck/site** | Presentation | Hand back the SVG/PNG or an iframe-able HTML |
 
 **How to export the DIAGRAM ONLY (strip all chrome):**
 - **Isolate the element, not the page.** Export the diagram node itself, not `document.body`:
-  - Mermaid → grab the rendered `<svg>` (the `.mermaid svg`) and save that SVG alone; for PNG, screenshot with a CSS selector clip on the svg's bounding box.
-  - React Flow → `toSvg`/`toPng` targeting the `.react-flow__viewport` (call `fitView` first); hide `Panel`/`Controls`/`MiniMap`/`Background` before capture.
+  - React Flow → `toSvg`/`toPng` (from `html-to-image`, which React Flow uses) targeting the `.react-flow__viewport` (call `fitView` first); hide `Panel`/`Controls`/`MiniMap`/`Background` before capture.
   - D3/Cytoscape → serialize the `<svg>` / `cy.png({full:true})` — the graphic only.
-- **Never export a source file's YAML frontmatter.** If emitting Mermaid/source, strip any `---` frontmatter block and any surrounding prose — output only the fenced diagram code (or the raw SVG).
 - **Bare-page render for PDF/PNG:** render the diagram into a minimal HTML that contains *only* the diagram element (no `<h1>`, talking points, or legend) — or set `@media print { .chrome { display:none } }` and print just the diagram container — then headless-Chrome capture the clipped bounds, not the window.
 - **Trim whitespace/margins** to the diagram's true bounding box (`fitView`, tight `viewBox`, `--force-device-scale-factor` for crisp PNG). Re-validate the exported file for clipping (Render Validation).
 
 ## IDE Preview — show the render in-editor where possible
 
 Prefer showing the live preview **inside the IDE** so the user doesn't leave the editor:
-- **VS Code / Cursor:** write the `.html` and open it — `code --reuse-window <file>` or the built-in **"Open with Live Preview"/Simple Browser** (`workbench.action.webview` / the Live Preview extension) renders HTML in a side panel. For a Mermaid `.md`, the built-in Markdown preview (`markdown.showPreview`) renders diagrams. Suggest the exact command if you can't trigger it directly.
+- **VS Code / Cursor:** write the `.html` and open it — `code --reuse-window <file>` or the built-in **"Open with Live Preview"/Simple Browser** (`workbench.action.webview` / the Live Preview extension) renders the interactive HTML in a side panel. Suggest the exact command if you can't trigger it directly.
 - **JetBrains:** open the HTML with the built-in browser preview.
 - **Fallback (any IDE):** open in the system browser (`open`/`xdg-open`/`start <file>`) and print the file path so the user can click it.
 - Always still write the file to disk so it persists and can be exported later.
 
+**Preview-tooling-unavailable fallback (be explicit, don't fake it):** if you cannot open an in-IDE preview AND cannot headless-screenshot (e.g. browser/MCP down, no Chrome), say so plainly: *"I can't render a preview here — open `<path>` to view it. I have NOT visually verified it; please check for clipping/contrast."* Do not present an unseen file as validated, and do not claim a screenshot you couldn't produce. Prefer the in-IDE preview over just handing back a path — actually attempt to open it (step 7), and only drop to "here's the path" when the open fails.
+
 Tell the user which preview you opened (or the path + one-line "open this to preview"). Then treat it as the approval gate (workflow step 7).
-
-## Quick Reference — Mermaid types
-
-```
-flowchart LR / TD      → small/linear flows only (NOT dense architecture — use React Flow+ELK)
-sequenceDiagram        → API calls, handshakes, request/response
-erDiagram              → data model / ERD (entities + cardinality)
-stateDiagram-v2        → state machines / lifecycles
-C4Context / C4Container→ formal architecture (if C4 wanted)
-```
-
-Minimal grounded example (component-level data flow):
-```mermaid
-flowchart LR
-  subgraph SRC["Sources"]
-    A["System A<br/>(real name · count)"]
-  end
-  subgraph HUB["Processing"]
-    T["Transform"]
-  end
-  A -->|"batch · nightly"| T --> OUT["Destination"]
-```
 
 ## Render Validation — catch clipping & artifacts before showing
 
@@ -175,7 +168,7 @@ A diagram that renders "mostly right" but clips a label or overlaps two nodes re
 |---|---|---|
 | **Text clipping** | Labels cut off by node/box edges; ellipsis where there shouldn't be | Widen nodes, reduce font, wrap text, `overflow: visible` |
 | **Canvas clipping** | Nodes/edges cut at the diagram's outer edge | Fit-to-view (`fitView` / `d3 zoom-to-fit`); add padding/margin; grow viewBox |
-| **Node overlap** | Boxes on top of each other; unreadable | Increase layout spacing (rank/node sep); use auto-layout (dagre/elk) |
+| **Node overlap** | Boxes on top of each other; unreadable | Increase ELK spacing (`spacing.nodeNode`, `layered.spacing.nodeNodeBetweenLayers`) |
 | **Edge issues** | Arrows crossing through nodes, missing arrowheads, overlapping labels | Reroute (orthogonal/curved), bump edge separation, offset edge labels |
 | **Cut edge labels** | Text on a line running off-canvas or under a node | Shorten label, add background, reposition |
 | **Overflow / scrollbars** | HTML shows scrollbars = content exceeds viewport | Size container to content; scale down; paginate an L3 into sections |
@@ -185,7 +178,12 @@ A diagram that renders "mostly right" but clips a label or overlaps two nodes re
 | **Font not loaded** | Fallback/boxed glyphs (brand font failed to load) | Embed/CDN the font; add web-safe fallback |
 | **Overlapping at small sizes** | Fine at full size, collides in the slide thumbnail | Test at target display size, not just full res |
 
-**Rule:** if you can't screenshot/inspect in this environment, say so and ask the user to eyeball the preview specifically for clipping/overlap — don't claim it's clean unseen.
+**Mandatory per-element contrast pass (not a glance).** The gestalt "looks fine" scan misses low-contrast text — that's how white-on-cream labels ship as "clean." Instead, **enumerate every text element** (each node title, node subtitle, edge label, zone label, legend item) and for each write its `fill` color and its background, then judge legibility. A quick way to force it:
+- List them: *"node titles #fff on #0b3d6b ✓ · edge labels #12222f on #fff ✓ · CBS labels #fff on #f5efe0 ✗ FAIL"* — fix every ✗ before showing.
+- **Never rely on a library's default text color.** Set text `fill`/`color` **explicitly** for every element type (node header, node body, edge label, zone label). React Flow, D3, and Cytoscape all have inheritance/default surprises — a themed background with an unset label color is the classic invisible-text bug. Define all of them in your `:root`/style block and reference the token everywhere.
+- Re-check text specifically against **brand fills** (item 4 in Company Theming): a brand color used as a node/zone fill may collide with default dark or light text.
+
+**Rule:** if you can't screenshot/inspect in this environment, say so and ask the user to eyeball the preview specifically for clipping/overlap/contrast — don't claim it's clean unseen. When preview tooling is down (no browser/headless), state that explicitly and hand back the file path with "please open to verify" — do not silently substitute a screenshot you couldn't take.
 
 ## Company Theming — ground the look on a brand
 
@@ -213,13 +211,13 @@ You can theme an entire diagram set to a company's brand so it looks like it cam
 
 **4. Accessibility:** verify text/background contrast meets ~WCAG AA even in brand colors; if a brand color fails on white, darken it for text and keep the true brand color for fills only.
 
-**5. Reuse:** save the theme spec (e.g. as a CSS `:root` block or a Mermaid `themeVariables` object) so the whole set — and future diagrams — stay identical. For a reusable style-header + per-diagram-prompt pattern, mirror the project's `data/presentation/Diagram_Prompts.html` if present.
+**5. Reuse:** save the theme spec as a CSS `:root` block (custom properties) and reference the tokens in the React Flow node/edge styles, so the whole set — and future diagrams — stay identical.
 
-Mermaid honors a theme inline:
-```
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#0b3d6b','primaryTextColor':'#fff','lineColor':'#1b7ce0','fontFamily':'BrandFont, Arial'}}}%%
-flowchart LR
-  ...
+```css
+:root {
+  --primary:#0b3d6b; --accent:#1b7ce0; --zone-bg:#e8f2ff;
+  --card:#ffffff; --text:#12222f; --font:'BrandFont', Arial, sans-serif;
+}
 ```
 
 ## Common Mistakes
@@ -238,7 +236,12 @@ flowchart LR
 | Inconsistent theme across a set | Save one theme spec; apply identically to every diagram |
 | Asking export format up front | Ask it only AFTER the user approves the HTML preview |
 | Exporting before the user has seen it | Always show the HTML preview and get approval first |
-| Dense architecture rendered in plain Mermaid (ugly gaps, crossing edges, clipped titles) | Use React Flow + ELK for >10 nodes / grouped zones / hero diagrams — Mermaid is not the default here |
+| Using Mermaid at all | Banned — its auto-layout isn't presentable. Use React Flow + ELK (or Cytoscape/D3). Start from `reactflow-template.html` |
+| Theming from memory / guessed brand colors | Clear the Pre-Render Gate: every palette value must name its source; guessed = not grounded, go fetch it |
+| Drawing the type the user first named without challenge | Pre-Render Gate #1: if the request word ("flow"/"sequence") conflicts with the type, propose the better one |
+| Passing Render Validation with a skim | Do the per-element contrast pass — list every text element's fill vs background; fix every ✗ |
+| Unset text color on a themed background (invisible text) | Set text fill/color EXPLICITLY for node header/body, edge labels, zone labels — never rely on library defaults |
+| Claiming validated when preview tooling was down | Say you couldn't verify; hand back the path with "please open to check" — don't fake a screenshot |
 | Brand requested but render came out neutral | You didn't extract the theme — MUST WebFetch the URL / Read the logo/repo, echo the palette, then apply it |
 | Extracted a theme but didn't apply it | The render must visibly use the brand hex/font; verify in step 5 |
 | Assuming valid source = clean render | Screenshot and inspect pixels; validate for clipping/overlap before showing |
@@ -246,7 +249,7 @@ flowchart LR
 | Export clips what HTML showed | Re-validate the exported PDF/PNG; set page size + export true bounds |
 | Claiming "looks good" without seeing it | If you can't screenshot, say so and ask the user to check clipping/overlap |
 | Export captured page chrome (title/talking points/legend) | Offer "diagram only (bare)" export; isolate the diagram element, not the page |
-| Emitted source with YAML frontmatter | Strip the `---` frontmatter + prose; output only the fenced diagram code or raw SVG |
+| Emitted source with YAML frontmatter | Strip the `---` frontmatter + prose; output only the diagram graphic or raw SVG |
 
 ## Real-World Impact
 

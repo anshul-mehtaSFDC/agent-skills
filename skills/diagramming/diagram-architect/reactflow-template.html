@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  diagram-architect · React Flow + ELK reference template
+  A self-contained, CDN-only starting point for presentation-grade node+edge
+  diagrams. ADAPT IT: swap the :root theme tokens for the extracted brand palette,
+  and replace RAW_NODES / RAW_EDGES / ZONES with the grounded content.
+  No build step — open directly in a browser or an IDE HTML preview.
+-->
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diagram</title>
+<style>
+  /* ---- THEME TOKENS: replace with the extracted brand palette ---- */
+  :root {
+    --primary:#0b3d6b;      /* headings, node header bar */
+    --accent:#1b7ce0;       /* edges, emphasis */
+    --zone-bg:#e8f2ff;      /* zone/group container fill */
+    --zone-border:#bcd8f5;
+    --card:#ffffff;         /* node body */
+    --text:#12222f;
+    --muted:#5a6b7b;
+    --font:'Inter','Segoe UI',Arial,sans-serif;
+  }
+  html,body{margin:0;height:100%;background:#f4f8ff;font-family:var(--font);color:var(--text);}
+  #app{width:100vw;height:100vh;}
+  .rf-node{background:var(--card);border:1px solid var(--zone-border);border-radius:10px;
+    box-shadow:0 2px 10px rgba(11,61,107,.10);min-width:150px;overflow:hidden;font-family:var(--font);}
+  .rf-node .hdr{background:var(--primary);color:#fff;font-weight:700;font-size:12.5px;padding:6px 10px;}
+  .rf-node .body{padding:7px 10px;font-size:11.5px;color:var(--muted);line-height:1.35;}
+  .rf-zone{background:var(--zone-bg);border:1.5px dashed var(--zone-border);border-radius:14px;}
+  .rf-zone .zlabel{position:absolute;top:6px;left:12px;font-size:12px;font-weight:700;color:var(--primary);letter-spacing:.03em;}
+  .react-flow__edge-path{stroke:var(--accent);stroke-width:1.8;}
+  .react-flow__edge-text{font-size:10px;fill:var(--text);font-family:var(--font);}
+  .react-flow__arrowhead{fill:var(--accent);}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import React, { useEffect, useState, useCallback } from 'https://esm.sh/react@18';
+import { createRoot } from 'https://esm.sh/react-dom@18/client';
+import ReactFlow, {
+  Background, Controls, MarkerType, Handle, Position, ReactFlowProvider, useReactFlow
+} from 'https://esm.sh/@xyflow/react@12?deps=react@18,react-dom@18';
+import ELK from 'https://esm.sh/elkjs@0.9.3/lib/elk.bundled.js';
+import 'https://esm.sh/@xyflow/react@12/dist/style.css';
+
+const elk = new ELK();
+
+// ---- GROUNDED CONTENT: replace these three with your real diagram ----
+// Zones (parent/group nodes). Omit `zones` for a flat diagram.
+const ZONES = [
+  { id:'z_src',  label:'SOURCES' },
+  { id:'z_hub',  label:'PROCESSING' },
+  { id:'z_out',  label:'OUTPUTS' },
+];
+const RAW_NODES = [
+  { id:'a', zone:'z_src', title:'System A', sub:'real name · count' },
+  { id:'b', zone:'z_src', title:'System B', sub:'real name · count' },
+  { id:'t', zone:'z_hub', title:'Transform', sub:'what it does' },
+  { id:'o', zone:'z_out', title:'Destination', sub:'result' },
+];
+const RAW_EDGES = [
+  { source:'a', target:'t', label:'batch · nightly' },
+  { source:'b', target:'t', label:'stream · live' },
+  { source:'t', target:'o', label:'writes' },
+];
+// ----------------------------------------------------------------------
+
+// size a node from its text so titles never clip
+const nodeW = (n) => Math.max(150, 9 * Math.max(n.title.length, (n.sub||'').length) + 24);
+const nodeH = 54;
+
+function CustomNode({ data }) {
+  return React.createElement('div', { className:'rf-node', style:{ width:data.w } },
+    React.createElement(Handle, { type:'target', position:Position.Left }),
+    React.createElement('div', { className:'hdr' }, data.title),
+    data.sub ? React.createElement('div', { className:'body' }, data.sub) : null,
+    React.createElement(Handle, { type:'source', position:Position.Right })
+  );
+}
+function ZoneNode({ data }) {
+  return React.createElement('div', { className:'rf-zone', style:{ width:'100%', height:'100%' } },
+    React.createElement('div', { className:'zlabel' }, data.label));
+}
+const nodeTypes = { custom: CustomNode, zone: ZoneNode };
+
+async function layout() {
+  const children = ZONES.map(z => ({
+    id: z.id,
+    layoutOptions: { 'elk.padding':'[top=34,left=16,bottom=16,right=16]' },
+    children: RAW_NODES.filter(n => n.zone === z.id).map(n => ({ id:n.id, width:nodeW(n), height:nodeH })),
+  }));
+  const graph = {
+    id:'root',
+    layoutOptions:{
+      'elk.algorithm':'layered',
+      'elk.direction':'RIGHT',
+      'elk.spacing.nodeNode':'60',
+      'elk.layered.spacing.nodeNodeBetweenLayers':'90',
+      'elk.hierarchyHandling':'INCLUDE_CHILDREN',
+    },
+    children,
+    edges: RAW_EDGES.map((e,i)=>({ id:'e'+i, sources:[e.source], targets:[e.target] })),
+  };
+  const res = await elk.layout(graph);
+  const nodes = [], byId = {};
+  for (const z of res.children) {
+    nodes.push({ id:z.id, type:'zone', position:{x:z.x,y:z.y},
+      data:{label:(ZONES.find(q=>q.id===z.id)||{}).label},
+      style:{width:z.width,height:z.height}, selectable:false, draggable:false, zIndex:0 });
+    for (const c of (z.children||[])) {
+      const meta = RAW_NODES.find(n=>n.id===c.id);
+      byId[c.id] = { id:c.id, type:'custom', parentNode:z.id, extent:'parent',
+        position:{x:c.x,y:c.y}, data:{...meta, w:c.width}, zIndex:1 };
+      nodes.push(byId[c.id]);
+    }
+  }
+  const edges = RAW_EDGES.map((e,i)=>({ id:'e'+i, source:e.source, target:e.target, label:e.label,
+    type:'smoothstep', markerEnd:{type:MarkerType.ArrowClosed}, labelBgPadding:[4,2],
+    labelBgStyle:{fill:'#fff',fillOpacity:.9} }));
+  return { nodes, edges };
+}
+
+function Flow(){
+  const [g,setG] = useState({nodes:[],edges:[]});
+  const { fitView } = useReactFlow();
+  useEffect(()=>{ layout().then(setG); },[]);
+  const onInit = useCallback(()=>setTimeout(()=>fitView({padding:.15}),50),[fitView]);
+  return React.createElement(ReactFlow, {
+    nodes:g.nodes, edges:g.edges, nodeTypes, onInit, fitView, proOptions:{hideAttribution:true},
+    minZoom:.2, maxZoom:2
+  }, React.createElement(Background,{gap:20,color:'#dde8f5'}), React.createElement(Controls));
+}
+createRoot(document.getElementById('app')).render(
+  React.createElement(ReactFlowProvider, null, React.createElement(Flow))
+);
+</script>
+</body>
+</html>
