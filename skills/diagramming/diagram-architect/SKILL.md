@@ -13,6 +13,8 @@ Produce **accurate, presentation-quality diagrams** by interviewing the user fir
 
 **REQUIRED SUB-SKILL:** For any non-trivial system (more than a handful of obvious boxes), run **`system-discovery` first** to produce a confirmed entity + connection inventory. A diagram's #1 defect is a missing or wrong *connection* — discovery is what prevents it. Draw nodes from the inventory's ENTITIES and edges from its CONNECTIONS; don't invent, don't omit. Skip discovery only for a trivial diagram you can ground in one glance.
 
+**The deliverable is the diagram — keep everything else minimal.** The output HTML should be the diagram (plus at most a title and, only if edge types differ, a small legend). Do NOT pad the page with talking points, narrative paragraphs, bullet summaries, or restated requirements. In chat, keep prose to a few lines (what type + why, the palette source, the preview path) — the diagram carries the content, not the text around it.
+
 ## When to Use
 
 - User says: "create a diagram", "draw the architecture", "flow chart", "data flow", "sequence diagram", "ER diagram", "deployment topology", "generate a diagram for X".
@@ -25,8 +27,16 @@ Produce **accurate, presentation-quality diagrams** by interviewing the user fir
 
 Ask these **four questions** in a single batch (use the AskUserQuestion tool if available). Do not start drawing until answered. If the user already answered some in their request, only ask the rest. **Do NOT ask export format here** — that comes after the user approves the preview (see Workflow).
 
-### 1. Diagram type
-What kind of diagram? Common types and when each fits:
+### 1. Diagram type — recommend, don't just accept
+**If the user forced a specific type** ("make a sequence diagram"), use it. **Otherwise, YOU recommend the best-fit type** from the request and (once available) the discovery inventory — don't make the user pick blind. Say which and why, e.g. *"This is about order flow over time → I'd suggest a **sequence** diagram, not architecture. Good?"* Base it on what the content is:
+- Ordering / "over time" / request-response / handshake → **sequence**
+- Steps + decisions / a process → **flowchart**
+- Components + how they connect / "the system" → **architecture**
+- Entities + relationships → **ERD**
+- States + transitions → **state machine**
+- Where things run → **deployment/topology**
+
+Offer the recommendation, let them override. Common types and when each fits:
 
 | Type | Shows | Use for |
 |---|---|---|
@@ -255,6 +265,8 @@ You can theme an entire diagram set to a company's brand so it looks like it cam
 | Claiming "looks good" without seeing it | If you can't screenshot, say so and ask the user to check clipping/overlap |
 | Export captured page chrome (title/talking points/legend) | Offer "diagram only (bare)" export; isolate the diagram element, not the page |
 | Emitted source with YAML frontmatter | Strip the `---` frontmatter + prose; output only the diagram graphic or raw SVG |
+| Padding the page/chat with talking points or restated requirements | Deliverable is the diagram; page = diagram + title + optional small legend; chat prose = a few lines |
+| Accepting the user's type without recommending | If not forced, recommend the best-fit type from context and say why (gate #1) |
 
 ## Real-World Impact
 
