@@ -11,6 +11,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Diagram</title>
+<!-- React Flow stylesheet as a normal <link> — importing CSS as an ES module fails in browsers -->
+<link rel="stylesheet" href="https://esm.sh/@xyflow/react@12/dist/style.css" />
 <style>
   /* ---- THEME TOKENS: replace with the extracted brand palette ---- */
   :root {
@@ -24,7 +26,16 @@
     --font:'Inter','Segoe UI',Arial,sans-serif;
   }
   html,body{margin:0;height:100%;background:#f4f8ff;font-family:var(--font);color:var(--text);}
-  #app{width:100vw;height:100vh;}
+  #app{display:flex;flex-direction:column;width:100vw;height:100vh;}
+  /* header is part of the "framed" export; toolbar is chrome and excluded from every export */
+  #header{padding:14px 20px;background:var(--card);border-bottom:2px solid var(--primary);}
+  #header h1{margin:0;font-size:18px;color:var(--primary);} #header p{margin:2px 0 0;font-size:12px;color:var(--muted);}
+  #toolbar{display:flex;gap:8px;align-items:center;padding:8px 16px;background:#eef4fb;border-bottom:1px solid var(--zone-border);font-size:13px;}
+  #toolbar button{font:inherit;font-size:12.5px;padding:5px 11px;border:1px solid var(--primary);background:var(--primary);
+    color:#fff;border-radius:6px;cursor:pointer;} #toolbar button.ghost{background:#fff;color:var(--primary);}
+  #toolbar label{display:flex;gap:5px;align-items:center;color:var(--text);cursor:pointer;margin-left:6px;}
+  #toolbar .spacer{flex:1;} #toolbar .hint{color:var(--muted);font-size:11.5px;}
+  #canvas{flex:1;position:relative;}
   .rf-node{background:var(--card);border:1px solid var(--zone-border);border-radius:10px;
     box-shadow:0 2px 10px rgba(11,61,107,.10);min-width:150px;overflow:hidden;font-family:var(--font);}
   .rf-node .hdr{background:var(--primary);color:#fff;font-weight:700;font-size:12.5px;padding:6px 10px;}
@@ -42,11 +53,18 @@
 <script type="module">
 import React, { useEffect, useState, useCallback } from 'https://esm.sh/react@18';
 import { createRoot } from 'https://esm.sh/react-dom@18/client';
-import ReactFlow, {
-  Background, Controls, MarkerType, Handle, Position, ReactFlowProvider, useReactFlow
+import {
+  ReactFlow,
+  Background, Controls, MarkerType, Handle, Position, ReactFlowProvider, useReactFlow,
+  applyNodeChanges
 } from 'https://esm.sh/@xyflow/react@12?deps=react@18,react-dom@18';
 import ELK from 'https://esm.sh/elkjs@0.9.3/lib/elk.bundled.js';
-import 'https://esm.sh/@xyflow/react@12/dist/style.css';
+import { toPng, toJpeg, toSvg } from 'https://esm.sh/html-to-image@1.11.11';
+// (React Flow CSS is loaded via <link> in <head> — do NOT import CSS as a module, it throws)
+
+// ---- DIAGRAM META: edit title/subtitle (shown in header + "framed" exports) ----
+const TITLE = 'Diagram Title';
+const SUBTITLE = 'subtitle / source / date';
 
 const elk = new ELK();
 
@@ -133,7 +151,7 @@ async function layout() {
       style:{width:z.width,height:z.height}, selectable:false, draggable:false, zIndex:0 });
     for (const c of (z.children||[])) {
       const meta = RAW_NODES.find(n=>n.id===c.id);
-      byId[c.id] = { id:c.id, type:'custom', parentNode:z.id, extent:'parent',
+      byId[c.id] = { id:c.id, type:'custom', parentId:z.id, extent:'parent',
         position:{x:c.x,y:c.y}, data:{...meta, w:c.width}, zIndex:1 };
       nodes.push(byId[c.id]);
     }
@@ -144,18 +162,70 @@ async function layout() {
   return { nodes, edges };
 }
 
+const h = React.createElement;
+
 function Flow(){
-  const [g,setG] = useState({nodes:[],edges:[]});
+  const [nodes,setNodes] = useState([]);
+  const [edges,setEdges] = useState([]);
+  const [withHeader,setWithHeader] = useState(true);   // export: framed (header) vs diagram-only
+  const [busy,setBusy] = useState(false);
   const { fitView } = useReactFlow();
-  useEffect(()=>{ layout().then(setG); },[]);
+
+  useEffect(()=>{ layout().then(({nodes,edges})=>{ setNodes(nodes); setEdges(edges); }); },[]);
   const onInit = useCallback(()=>setTimeout(()=>fitView({padding:.15}),50),[fitView]);
-  return React.createElement(ReactFlow, {
-    nodes:g.nodes, edges:g.edges, nodeTypes, onInit, fitView, proOptions:{hideAttribution:true},
-    minZoom:.2, maxZoom:2
-  }, React.createElement(Background,{gap:20,color:'#dde8f5'}), React.createElement(Controls));
+  // controlled nodes → user can DRAG to reposition; changes persist (and export captures them)
+  const onNodesChange = useCallback((chg)=>setNodes(ns=>applyNodeChanges(chg,ns)),[]);
+
+  // Export. `mode`: 'png' | 'jpeg' | 'svg'. Honors the header toggle.
+  // The React Flow viewport is the diagram; #header is optional; #toolbar is ALWAYS excluded.
+  async function exportImage(mode){
+    setBusy(true);
+    try{
+      fitView({padding:.12}); await new Promise(r=>setTimeout(r,250));
+      const target = withHeader ? document.getElementById('app')
+                                : document.querySelector('.react-flow__viewport');
+      const opts = {
+        pixelRatio: 2, cacheBust: true, backgroundColor: '#ffffff',
+        // never capture the toolbar (it's UI chrome, not the diagram)
+        filter: (n)=> !(n?.id==='toolbar' || n?.classList?.contains?.('react-flow__controls')
+                        || n?.classList?.contains?.('react-flow__minimap')),
+      };
+      const fn = mode==='png'? toPng : mode==='jpeg'? toJpeg : toSvg;
+      const dataUrl = await fn(target, mode==='jpeg'?{...opts,quality:.95}:opts);
+      const a=document.createElement('a');
+      a.download = `diagram${withHeader?'':'-bare'}.${mode==='jpeg'?'jpg':mode}`;
+      a.href=dataUrl; a.click();
+    }catch(e){ alert('Export failed: '+e.message); }
+    finally{ setBusy(false); }
+  }
+
+  const toolbar = h('div',{id:'toolbar'},
+    h('strong',{style:{color:'#0b3d6b'}},'Export:'),
+    h('button',{onClick:()=>exportImage('png'),disabled:busy},'PNG'),
+    h('button',{onClick:()=>exportImage('jpeg'),disabled:busy},'JPEG'),
+    h('button',{className:'ghost',onClick:()=>exportImage('svg'),disabled:busy},'SVG'),
+    h('label',null, h('input',{type:'checkbox',checked:withHeader,
+      onChange:e=>setWithHeader(e.target.checked)}), 'include header'),
+    h('button',{className:'ghost',onClick:()=>fitView({padding:.15})},'Fit'),
+    h('span',{className:'spacer'}),
+    h('span',{className:'hint'}, busy?'rendering…':'drag nodes to reposition · export uses current layout')
+  );
+
+  const header = h('div',{id:'header'}, h('h1',null,TITLE), SUBTITLE?h('p',null,SUBTITLE):null);
+
+  const canvas = h('div',{id:'canvas'},
+    h(ReactFlow,{ nodes, edges, nodeTypes, onNodesChange, onInit, fitView,
+      proOptions:{hideAttribution:true}, minZoom:.2, maxZoom:2, nodesDraggable:true },
+      h(Background,{gap:20,color:'#dde8f5'}), h(Controls))
+  );
+
+  // header is inside #app so "include header" captures it; toolbar sits above and is filtered out
+  return h(React.Fragment,null, toolbar, header, canvas);
 }
+
+// mount: toolbar/header/canvas all live under #app (export target when header included)
 createRoot(document.getElementById('app')).render(
-  React.createElement(ReactFlowProvider, null, React.createElement(Flow))
+  h(ReactFlowProvider, null, h(Flow))
 );
 </script>
 </body>

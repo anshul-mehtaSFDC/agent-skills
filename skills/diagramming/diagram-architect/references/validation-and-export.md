@@ -28,10 +28,18 @@ Capture: `chrome --headless --screenshot=/tmp/diag.png --window-size=1600,900 --
 
 **Contrast:** don't eyeball — use the `checkContrast()` snippet in `../reactflow-template.html` (fill in your text/bg token pairs; logs any pair <4.5:1). Set every text color explicitly.
 
+## Interactive preview — the user can adjust + self-export
+`reactflow-template.html` ships an **in-page toolbar** so the user drives the last mile without you re-rendering:
+- **Drag any node** to reposition — nodes are controlled (`onNodesChange`/`applyNodeChanges`), so moves persist and the export captures the *current* layout, not the original ELK pass.
+- **Export buttons (PNG / JPEG / SVG)** via `html-to-image` — no headless round-trip needed.
+- **"include header" toggle** = the framed-vs-bare choice, baked in: checked → captures `#app` (header + diagram); unchecked → captures only `.react-flow__viewport`. The toolbar itself and Controls/MiniMap are always filtered out of every export.
+
+So after approval you can just tell the user: *drag to tweak, pick a format, toggle the header.* You still **ask the format question** (below) to set the right default, and still **re-validate any artifact** you generate yourself.
+
 ## Export (ask AFTER approval)
-**First ask: bare diagram or framed page?** The preview HTML often has chrome (title, legend, headers).
-- **Diagram only (bare)** — just the graphic *(default for slides/embeds)*.
-- **Framed** — diagram + surrounding page/labels/legend.
+**First ask: bare diagram or framed page?** The preview HTML often has chrome (title, legend, headers). This maps directly to the template's **"include header"** checkbox.
+- **Diagram only (bare)** — just the graphic *(default for slides/embeds)*; uncheck "include header".
+- **Framed** — diagram + surrounding page/labels/legend; leave "include header" checked.
 
 **Match format to detail level:** **L1/L2 → PNG/PDF** fine for a slide. **L3 (dense) → SVG or interactive HTML, NOT a deck PNG** (a detailed graph shrunk to a slide PNG is unreadable — give zoomable SVG/HTML). If they insist on a PNG for L3, warn it'll be unreadable and offer to split.
 
